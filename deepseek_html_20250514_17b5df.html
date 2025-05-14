@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kick.com GTA Canlı Yayınları</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #0f0f13;
+            color: #ffffff;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        header {
+            background-color: #0f0f13;
+            padding: 20px 0;
+            border-bottom: 1px solid #2a2a35;
+            text-align: center;
+        }
+        
+        h1 {
+            color: #00ff00;
+            margin: 0;
+        }
+        
+        .streamer-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 20px;
+            margin-top: 30px;
+        }
+        
+        .streamer-card {
+            background-color: #1a1a24;
+            border-radius: 8px;
+            overflow: hidden;
+            transition: transform 0.3s;
+        }
+        
+        .streamer-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 5px 15px rgba(0, 255, 0, 0.2);
+        }
+        
+        .streamer-thumbnail {
+            width: 100%;
+            height: 180px;
+            background-color: #2a2a35;
+            position: relative;
+        }
+        
+        .streamer-thumbnail img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        
+        .live-badge {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background-color: #ff0000;
+            color: white;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        
+        .streamer-info {
+            padding: 15px;
+        }
+        
+        .streamer-name {
+            font-weight: bold;
+            margin-bottom: 5px;
+            color: #00ff00;
+        }
+        
+        .streamer-title {
+            font-size: 14px;
+            margin-bottom: 10px;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+        
+        .streamer-viewers {
+            display: flex;
+            align-items: center;
+            font-size: 13px;
+            color: #aaaaaa;
+        }
+        
+        .viewer-icon {
+            width: 12px;
+            height: 12px;
+            background-color: #ff0000;
+            border-radius: 50%;
+            margin-right: 5px;
+        }
+        
+        .watch-button {
+            display: inline-block;
+            background-color: #00ff00;
+            color: #000000;
+            padding: 8px 15px;
+            border-radius: 4px;
+            text-decoration: none;
+            font-weight: bold;
+            margin-top: 10px;
+            transition: background-color 0.3s;
+        }
+        
+        .watch-button:hover {
+            background-color: #00cc00;
+        }
+        
+        .last-updated {
+            text-align: center;
+            margin-top: 30px;
+            color: #aaaaaa;
+            font-size: 14px;
+        }
+        
+        .refresh-button {
+            background-color: #2a2a35;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-top: 20px;
+            transition: background-color 0.3s;
+        }
+        
+        .refresh-button:hover {
+            background-color: #3a3a45;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="container">
+            <h1>Kick.com GTA Canlı Yayınları</h1>
+        </div>
+    </header>
+    
+    <div class="container">
+        <div class="streamer-list">
+            <!-- Örnek yayıncı kartı - Gerçek veriler için API veya manuel güncelleme gerekir -->
+            <div class="streamer-card">
+                <div class="streamer-thumbnail">
+                    <img src="https://via.placeholder.com/300x180" alt="Stream thumbnail">
+                    <span class="live-badge">CANLI</span>
+                </div>
+                <div class="streamer-info">
+                    <div class="streamer-name">YayıncıAdı</div>
+                    <div class="streamer-title">GTA 5 RP - Harika bir gün!</div>
+                    <div class="streamer-viewers">
+                        <span class="viewer-icon"></span>
+                        <span>1,245 izleyici</span>
+                    </div>
+                    <a href="https://kick.com/yayinciadi" class="watch-button" target="_blank">İzle</a>
+                </div>
+            </div>
+            
+            <!-- Diğer yayıncı kartları buraya eklenecek -->
+            
+        </div>
+        
+        <div class="last-updated">
+            Son güncelleme: <span id="update-time">15 Mayıs 2023, 14:30</span>
+        </div>
+        
+        <center>
+            <button class="refresh-button" onclick="refreshData()">Yenile</button>
+        </center>
+    </div>
+    
+    <script>
+        // Bu kısım gerçek verileri çekmek için düzenlenmelidir
+        function refreshData() {
+            alert('Veriler yenileniyor... (Gerçek uygulamada burada API çağrısı yapılır)');
+            document.getElementById('update-time').textContent = new Date().toLocaleString();
+        }
+        
+        // Sayfa yüklendiğinde tarihi güncelle
+        document.addEventListener('DOMContentLoaded', function() {
+            document.getElementById('update-time').textContent = new Date().toLocaleString();
+        });
+    </script>
+</body>
+</html>
