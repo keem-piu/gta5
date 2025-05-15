@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Kick.com GTA Canlı Yayınları</title>
     <style>
+        /* CSS kodu aynı kalıyor */
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             margin: 0;
@@ -195,7 +196,7 @@
     </div>
     
     <script>
-        // Statik veri olarak sağlanan Kick yayıncıları
+        // Tüm yayıncıların listesi
         const STATIC_STREAMERS = [
             "asepos", "limonvari", "x4te", "egemenfx", "chavohaze", "diorr35", 
             "justwicky", "canarkhu", "thekolpa", "aka", "gogo", "fjorgyn", 
@@ -217,35 +218,74 @@
             "phriksos"
         ];
 
-        // Yayında olan yayıncılar (belirttiğiniz kanalları da ekledim)
-        const LIVE_STREAMERS = [
-            "asepos", "limonvari", "x4te", "egemenfx", "chavohaze", // Eklediğiniz kanallar
-            "odisnos", "katasayf", "atillaberk", "aka", "gogo", "diorr35", 
-            "wasg0d", "burakg", "ogibkg", "liftof", "hakki34"
-        ];
+        // Canlı yayıncılar için boş bir dizi
+        let LIVE_STREAMERS = [];
         
-        // Yayıncı istatistikleri
-        const STREAMER_STATS = {
-            "asepos": { followers: "15.2K", lastStream: "3 saat önce" },
-            "limonvari": { followers: "8.7K", lastStream: "5 saat önce" },
-            "x4te": { followers: "12.4K", lastStream: "2 saat önce" },
-            "egemenfx": { followers: "9.3K", lastStream: "1 gün önce" },
-            "chavohaze": { followers: "6.9K", lastStream: "4 saat önce" },
-            "odisnos": { followers: "20.0K", lastStream: "1 gün önce" },
-            "katasayf": { followers: "6.7K", lastStream: "1 gün önce" },
-            "atillaberk": { followers: "5.8K", lastStream: "2 gün önce" },
-            "aka": { followers: "35K", lastStream: "4 gün önce" },
-            "gogo": { followers: "11.1K", lastStream: "7 saat önce" },
-            "diorr35": { followers: "8.4K", lastStream: "1 gün önce" },
-            "wasg0d": { followers: "5.1K", lastStream: "Yayın bilgisi yok" },
-            "burakg": { followers: "27.7K", lastStream: "16 saat önce" },
-            "ogibkg": { followers: "11.1K", lastStream: "3 gün önce" },
-            "liftof": { followers: "22K", lastStream: "1 gün önce" },
-            "hakki34": { followers: "4.7K", lastStream: "9 gün önce" }
-        };
+        // Yayıncı istatistikleri için boş obje
+        let STREAMER_STATS = {};
         
         // Sponsorlu yayıncı
         const SPONSORED_STREAMER = "phriksos";
+        
+        // Kick API'sine proxy üzerinden erişim
+        async function checkLiveStreamers() {
+            try {
+                // Her bir yayıncı için ayrı ayrı kontrol yapıyoruz
+                const liveStreamers = [];
+                const stats = {};
+                
+                // Tüm yayıncıları kontrol et (sınırlı sayıda)
+                for (const username of STATIC_STREAMERS.slice(0, 20)) { // İlk 20 yayıncıyı kontrol et
+                    try {
+                        const response = await fetch(`https://kick.com/api/v2/channels/${username}`);
+                        if (!response.ok) continue;
+                        
+                        const data = await response.json();
+                        
+                        if (data.is_live) {
+                            liveStreamers.push(username);
+                        }
+                        
+                        stats[username] = {
+                            followers: formatNumber(data.followers_count),
+                            lastStream: data.last_live_at ? formatDate(data.last_live_at) : "Bilinmiyor"
+                        };
+                        
+                        // API isteklerini yavaşlat
+                        await new Promise(resolve => setTimeout(resolve, 200));
+                    } catch (e) {
+                        console.error(`${username} kontrol edilirken hata:`, e);
+                    }
+                }
+                
+                LIVE_STREAMERS = liveStreamers;
+                STREAMER_STATS = stats;
+                
+                return liveStreamers.length > 0;
+            } catch (error) {
+                console.error('Genel hata:', error);
+                return false;
+            }
+        }
+        
+        // Sayıyı biçimlendirme (örn. 1000 -> 1K)
+        function formatNumber(num) {
+            if (!num) return "0";
+            return num >= 1000 ? (num/1000).toFixed(1) + 'K' : num.toString();
+        }
+        
+        // Tarihi biçimlendirme
+        function formatDate(dateString) {
+            const now = new Date();
+            const date = new Date(dateString);
+            const diffHours = Math.floor((now - date) / (1000 * 60 * 60));
+            
+            if (diffHours < 1) return "1 saatten az";
+            if (diffHours < 24) return `${diffHours} saat önce`;
+            
+            const diffDays = Math.floor(diffHours / 24);
+            return `${diffDays} gün önce`;
+        }
         
         async function fetchStreamers() {
             document.getElementById('loading').style.display = 'block';
@@ -253,7 +293,14 @@
             document.getElementById('streamer-list').innerHTML = '';
             
             try {
-                // Statik verileri kullanarak yayıncıları göster
+                // API'den canlı yayınları kontrol et
+                const apiSuccess = await checkLiveStreamers();
+                
+                if (!apiSuccess) {
+                    throw new Error('Canlı yayın bulunamadı veya bağlantı sorunu oluştu');
+                }
+                
+                // Yayıncıları render et
                 renderStreamers(STATIC_STREAMERS);
                 updateTime();
             } catch (error) {
