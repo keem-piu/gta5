@@ -186,8 +186,8 @@
         .live-stream-embed {
             width: 100%;
             aspect-ratio: 16 / 9; /* Oranı sabitlemek için */
-            margin-top: 10px;
             border: none;
+            margin-top: 10px;
         }
     </style>
 </head>
@@ -300,37 +300,39 @@
                 const streamerCard = document.createElement('div');
                 streamerCard.className = `streamer-card ${isLive ? 'live' : 'offline'}`;
                 
-                // Thumbnail URL'sini oluşturma
-                const thumbnailUrl = `https://kick.com/stream-thumbnail/${username}.jpg`;
-                
-                let streamerContent = `
-                    <div class="streamer-thumbnail">
-                        <img src="${thumbnailUrl}" alt="${username} yayını" onerror="this.src='https://via.placeholder.com/300x180'" style="${!isLive ? 'filter: grayscale(80%);' : ''}">
-                        ${isLive ? 
-                            '<span class="live-badge">CANLI</span>' : 
-                            '<span class="offline-badge">OFFLINE</span>'}
-                        ${isSponsored ? '<span style="position: absolute; top: 10px; right: 10px; background-color: gold; color: black; padding: 3px 8px; border-radius: 4px; font-size: 12px; font-weight: bold;">SPONSOR</span>' : ''}
-                    </div>
-                    <div class="streamer-info">
-                        <div class="streamer-name ${!isLive ? 'offline' : ''}">${username}</div>
-                        <div class="streamer-title">${isLive ? 'GTA RP - Canlı Yayın' : 'Şu anda yayında değil'}</div>
-                        ${!isLive ? `
-                        <div class="streamer-stats">
-                            <div>${stats.followers} takipçi</div>
-                            <div class="streamer-last-stream">Son yayın: ${stats.lastStream}</div>
-                        </div>
-                        ` : `
-                        <div class="streamer-viewers">
-                            <span class="${isLive ? 'viewer-icon' : 'offline-viewer-icon'}"></span>
-                            <span>${isLive ? 'Canlı izleyici' : 'Offline'}</span>
-                        </div>
-                        `}
-                        <a href="https://kick.com/${username}" class="watch-button ${!isLive ? 'offline' : ''}" target="_blank">${isLive ? 'İzle' : 'Kanal'}</a>
-                    </div>
-                `;
+                let streamerContent = '';
                 
                 if (isLive) {
-                    streamerContent += `<iframe class="live-stream-embed" src="https://player.kick.com/${username}" frameborder="0" scrolling="no" allowfullscreen="true"></iframe>`;
+                    streamerContent += `
+                        <iframe class="live-stream-embed" src="https://player.kick.com/${username}" frameborder="0" scrolling="no" allowfullscreen="true"></iframe>
+                        <div class="streamer-info">
+                            <div class="streamer-name">${username}</div>
+                            <div class="streamer-title">GTA RP - Canlı Yayın</div>
+                            <div class="streamer-viewers">
+                                <span class="viewer-icon"></span>
+                                <span>Canlı izleyici</span>
+                            </div>
+                            <a href="https://kick.com/${username}" class="watch-button" target="_blank">Sohbete Git</a>
+                        </div>
+                    `;
+                } else {
+                    const thumbnailUrl = `https://kick.com/stream-thumbnail/${username}.jpg`;
+                    streamerContent += `
+                        <div class="streamer-thumbnail">
+                            <img src="${thumbnailUrl}" alt="${username} yayını" onerror="this.src='https://via.placeholder.com/300x180'" style="filter: grayscale(80%);">
+                            <span class="offline-badge">OFFLINE</span>
+                            ${isSponsored ? '<span style="position: absolute; top: 10px; right: 10px; background-color: gold; color: black; padding: 3px 8px; border-radius: 4px; font-size: 12px; font-weight: bold;">SPONSOR</span>' : ''}
+                        </div>
+                        <div class="streamer-info">
+                            <div class="streamer-name offline">${username}</div>
+                            <div class="streamer-title">Şu anda yayında değil</div>
+                            <div class="streamer-stats">
+                                <div>${stats.followers} takipçi</div>
+                                <div class="streamer-last-stream">Son yayın: ${stats.lastStream}</div>
+                            </div>
+                            <a href="https://kick.com/${username}" class="watch-button offline" target="_blank">Kanal</a>
+                        </div>
+                    `;
                 }
                 
                 streamerCard.innerHTML = streamerContent;
