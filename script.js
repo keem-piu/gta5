@@ -24,7 +24,7 @@ function formatNumber(num) {
 }
 
 function formatDate(dateString) {
-    if (!dateString) return "Hiç yayın yapmadı";
+    if (!dateString) return "Bilinmiyor";
     const now = new Date();
     const date = new Date(dateString);
     const diffHours = Math.floor((now - date) / (1000 * 60 * 60));
