@@ -24,7 +24,7 @@ function formatNumber(num) {
 }
 
 function formatDate(dateString) {
-    if (!dateString) return "Bilinmiyor";
+    if (!dateString) return "Hiç yayın yapmadı";
     const now = new Date();
     const date = new Date(dateString);
     const diffHours = Math.floor((now - date) / (1000 * 60 * 60));
@@ -68,54 +68,100 @@ function formatDuration(startDate) {
     }
 }
 
+async function getProfilePicture(username) {
+    const sizes = {
+        small: `https://images.kick.com/channels/${username}/profile_small`,
+        medium: `https://images.kick.com/channels/${username}/profile_medium`,
+        large: `https://images.kick.com/channels/${username}/profile_large`
+    };
+    
+    async function checkImage(url) {
+        return new Promise((resolve) => {
+            const img = new Image();
+            img.onload = () => resolve(url);
+            img.onerror = () => resolve(null);
+            img.src = url;
+        });
+    }
+    
+    const validUrl = await checkImage(sizes.small) || 
+                    await checkImage(sizes.medium) || 
+                    await checkImage(sizes.large);
+    
+    return validUrl || `https://via.placeholder.com/100/1a1a24/00ff00?text=${username.slice(0, 2).toUpperCase()}`;
+}
+
 async function fetchStreamerData(username) {
     try {
-        const response = await fetch(`https://kick.com/api/v2/channels/${username}`);
-        if (response.ok) {
-            const data = await response.json();
-            
-            let startTime = null;
-            if (data.livestream?.created_at) {
-                startTime = new Date(data.livestream.created_at).toISOString();
-            }
-            
-            return {
-                username: username,
-                isLive: data.livestream?.is_live || false,
-                viewers: data.livestream?.viewer_count || 0,
-                followers: formatNumber(data.followers_count),
-                lastStream: data.last_live_at ? formatDate(data.last_live_at) : "Bilinmiyor",
-                title: data.livestream?.session_title || "Kick.com Canlı Yayın",
-                thumbnail: data.livestream?.thumbnail?.url || null,
-                startTime: startTime
-            };
-        }
+        const [profileData, streamData] = await Promise.all([
+            fetch(`https://kick.com/api/v2/channels/${username}`).then(res => res.json()),
+            fetch(`https://kick.com/api/v2/channels/${username}/livestream`).then(res => res.json())
+        ]);
+
+        const profilePic = await getProfilePicture(username);
+        
+        return {
+            username: username,
+            isLive: streamData?.is_live || false,
+            viewers: streamData?.viewer_count || 0,
+            followers: formatNumber(profileData.followers_count || 0),
+            lastStream: profileData.last_live_at ? formatDate(profileData.last_live_at) : "Hiç yayın yapmadı",
+            title: streamData?.session_title || `${username} Kanalı`,
+            thumbnail: streamData?.thumbnail?.url || null,
+            startTime: streamData?.created_at || null,
+            category: streamData?.categories?.[0]?.name || "GTA",
+            profilePic: profilePic
+        };
     } catch (error) {
         console.error(`${username} veri alım hatası:`, error);
+        return {
+            username: username,
+            isLive: false,
+            viewers: 0,
+            followers: "0",
+            lastStream: "Bilinmiyor",
+            title: `${username} Kanalı`,
+            thumbnail: null,
+            startTime: null,
+            category: "GTA",
+            profilePic: await getProfilePicture(username)
+        };
     }
-    return {
-        username: username,
-        isLive: false,
-        viewers: 0,
-        followers: "N/A",
-        lastStream: "Bilinmiyor",
-        title: "Kick.com Canlı yayın",
-        thumbnail: null,
-        startTime: null
-    };
 }
 
 async function fetchStreamerStats() {
     const stats = {};
-    const requests = STATIC_STREAMERS.map(username => fetchStreamerData(username));
-    const results = await Promise.all(requests);
+    try {
+        const requests = STATIC_STREAMERS.map(username => 
+            fetchStreamerData(username).catch(e => {
+                console.error(`${username} veri alınamadı:`, e);
+                return {
+                    username: username,
+                    isLive: false,
+                    viewers: 0,
+                    followers: "0",
+                    lastStream: "Bilinmiyor",
+                    title: `${username} Kanalı`,
+                    thumbnail: null,
+                    startTime: null,
+                    category: "GTA",
+                    profilePic: `https://via.placeholder.com/100/1a1a24/00ff00?text=${username.slice(0, 2).toUpperCase()}`
+                };
+            })
+        );
+        
+        const results = await Promise.all(requests);
+        
+        results.forEach(data => {
+            stats[data.username] = data;
+        });
 
-    results.forEach(data => {
-        stats[data.username] = data;
-    });
-
-    STREAMER_STATS = stats;
-    return results;
+        STREAMER_STATS = stats;
+        return results;
+    } catch (error) {
+        console.error('Streamer istatistikleri alınamadı:', error);
+        throw error;
+    }
 }
 
 function updateDurationForCard(card, startTime) {
@@ -156,22 +202,26 @@ function renderStreamers(streamersData) {
                                     scrolling="no"
                                     allowfullscreen="true"></iframe>
                                 <div class="live-badge">CANLI</div>` :
-                    `<div class="offline-placeholder">ÇEVRİMDIŞI</div>`}
+                    `<div class="offline-placeholder">
+                        <img src="${data.profilePic}" alt="${data.username}" class="profile-image" onerror="this.src='https://via.placeholder.com/100/1a1a24/00ff00?text=${data.username.slice(0, 2).toUpperCase()}'">
+                        <div class="offline-status">ÇEVRİMDIŞI</div>
+                    </div>`}
                 ${isSponsored ? '<div class="sponsored-badge">SPONSOR</div>' : ''}
             </div>
         `;
 
-        const watchButtonContent = `
-            <div class="watch-button-container">
+        const metaContent = `
+            <div class="streamer-meta">
                 <a href="https://kick.com/${data.username}" class="watch-button" target="_blank">
-                    ${isLive ? 'Şimdi İzle' : 'Kanalı Görüntüle'}
+                    ${isLive ? 'İZLE' : 'KANAL'}
                 </a>
                 ${isLive ? `
                     <div class="viewer-count">
                         <span class="viewer-icon"></span>
                         ${formatNumber(data.viewers)}
-                        ${startTime ? `<span class="live-duration">(${formatDuration(startTime)})</span>` : ''}
                     </div>
+                    ${startTime ? `<div class="live-duration">${formatDuration(startTime)}</div>` : ''}
+                    <div class="streamer-category">${data.category}</div>
                 ` : ''}
             </div>
         `;
@@ -181,11 +231,11 @@ function renderStreamers(streamersData) {
             <div class="streamer-info">
                 <div class="streamer-name">${data.username}</div>
                 <div class="streamer-title">${data.title}</div>
+                ${metaContent}
                 <div class="streamer-stats">
                     <div>${data.followers} takipçi</div>
                     <div class="streamer-last-stream">${isLive ? "Şu anda yayında" : `Son yayın: ${data.lastStream}`}</div>
                 </div>
-                ${watchButtonContent}
             </div>
         `;
 
@@ -207,24 +257,34 @@ function renderStreamers(streamersData) {
 }
 
 async function fetchStreamers() {
-    document.getElementById('loading').style.display = 'block';
-    document.getElementById('error-message').style.display = 'none';
-    document.getElementById('streamer-list').innerHTML = '';
+    const loadingElement = document.getElementById('loading');
+    const errorElement = document.getElementById('error-message');
+    const streamerList = document.getElementById('streamer-list');
+    
+    loadingElement.style.display = 'block';
+    errorElement.style.display = 'none';
+    streamerList.innerHTML = '';
+    errorElement.textContent = '';
 
     try {
         const streamersData = await fetchStreamerStats();
+        if (streamersData.length === 0) {
+            throw new Error('Hiç yayıncı verisi alınamadı');
+        }
+        
         const sortedStreamers = streamersData.sort((a, b) => {
             if (a.isLive && !b.isLive) return -1;
             if (!a.isLive && b.isLive) return 1;
             return b.viewers - a.viewers;
         });
+        
         renderStreamers(sortedStreamers);
         updateTime();
     } catch (error) {
         console.error('Hata:', error);
         showError(`Yayınlar yüklenirken bir hata oluştu: ${error.message}`);
     } finally {
-        document.getElementById('loading').style.display = 'none';
+        loadingElement.style.display = 'none';
     }
 }
 
