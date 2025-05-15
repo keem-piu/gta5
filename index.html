@@ -201,11 +201,21 @@
         
         .offline-placeholder {
             display: flex;
+            flex-direction: column;
             align-items: center;
             justify-content: center;
             height: 100%;
             color: var(--text-secondary);
             font-size: 1rem;
+            gap: 10px;
+        }
+        
+        .profile-image {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 3px solid var(--primary);
         }
         
         .sponsored-badge {
@@ -392,7 +402,8 @@
                         title: data.livestream?.session_title || "Kick.com Canlı Yayın",
                         thumbnail: data.livestream?.thumbnail?.url || null,
                         startTime: startTime,
-                        category: data.livestream?.categories?.[0]?.name || "GTA"
+                        category: data.livestream?.categories?.[0]?.name || "GTA",
+                        profilePic: data.user?.profile_pic || `https://kick.com/api/v1/users/${username}`
                     };
                 } else {
                     console.error(`${username} için hata kodu: ${response.status}`);
@@ -409,8 +420,23 @@
                     title: "Kick.com Canlı yayın",
                     thumbnail: null,
                     startTime: null,
-                    category: "GTA"
+                    category: "GTA",
+                    profilePic: `https://kick.com/api/v1/users/${username}`
                 };
+            }
+        }
+
+        async function fetchProfilePicture(username) {
+            try {
+                const response = await fetch(`https://kick.com/api/v1/users/${username}`);
+                if (response.ok) {
+                    const data = await response.json();
+                    return data.profile_pic;
+                }
+                return `https://kick.com/api/v1/users/${username}`;
+            } catch (error) {
+                console.error(`${username} profil resmi alınamadı:`, error);
+                return `https://kick.com/api/v1/users/${username}`;
             }
         }
 
@@ -429,19 +455,30 @@
                             title: "Kick.com Canlı yayın",
                             thumbnail: null,
                             startTime: null,
-                            category: "GTA"
+                            category: "GTA",
+                            profilePic: `https://kick.com/api/v1/users/${username}`
                         };
                     })
                 );
                 
                 const results = await Promise.all(requests);
                 
-                results.forEach(data => {
+                // Profil resimlerini ayrıca alalım
+                const profilePicRequests = results.map(data => 
+                    fetchProfilePicture(data.username).then(profilePic => {
+                        data.profilePic = profilePic;
+                        return data;
+                    })
+                );
+                
+                const finalResults = await Promise.all(profilePicRequests);
+                
+                finalResults.forEach(data => {
                     stats[data.username] = data;
                 });
 
                 STREAMER_STATS = stats;
-                return results;
+                return finalResults;
             } catch (error) {
                 console.error('Streamer istatistikleri alınamadı:', error);
                 throw error;
@@ -486,7 +523,10 @@
                                             scrolling="no"
                                             allowfullscreen="true"></iframe>
                                         <div class="live-badge">CANLI</div>` :
-                            `<div class="offline-placeholder">ÇEVRİMDIŞI</div>`}
+                            `<div class="offline-placeholder">
+                                <img src="${data.profilePic}" alt="${data.username}" class="profile-image">
+                                ÇEVRİMDIŞI
+                            </div>`}
                         ${isSponsored ? '<div class="sponsored-badge">SPONSOR</div>' : ''}
                     </div>
                 `;
