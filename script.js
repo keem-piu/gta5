@@ -26,9 +26,8 @@ function formatDuration(startDate) {
     if (!startDate) return "";
     const now = new Date();
     const start = new Date(startDate);
-    // Yayın başlangıç zamanı ile şu anki zaman arasındaki farkı milisaniye cinsinden al
-    const diffMilliseconds = now.getTime() - start.getTime();
-    const diffSeconds = Math.floor(diffMilliseconds / 1000);
+    const diffSeconds = Math.floor((now.getTime() - start.getTime()) / 1000);
+
     const hours = Math.floor(diffSeconds / 3600);
     const minutes = Math.floor((diffSeconds % 3600) / 60);
     const seconds = diffSeconds % 60;
@@ -54,7 +53,7 @@ async function fetchStreamerData(username) {
                 lastStream: data.last_live_at ? formatDate(data.last_live_at) : "Bilinmiyor",
                 title: data.livestream?.session_title || "Kick.com Canlı Yayın",
                 thumbnail: data.livestream?.thumbnail?.url || null,
-                startTime: data.livestream?.created_at ? new Date(data.livestream.created_at) : null // Yayın başlangıç zamanını Date nesnesi olarak al
+                startTime: data.livestream?.created_at ? new Date(data.livestream.created_at) : null
             };
         }
     } catch (error) {
@@ -92,11 +91,9 @@ async function fetchStreamers() {
 
     try {
         const streamersData = await fetchStreamerStats();
-        // Canlı yayında olanları önce sırala
         const sortedStreamers = streamersData.sort((a, b) => {
             if (a.isLive && !b.isLive) return -1;
             if (!a.isLive && b.isLive) return 1;
-            // Aynı durumdaysa izleyici sayısına göre sırala
             return b.viewers - a.viewers;
         });
         renderStreamers(sortedStreamers);
@@ -128,7 +125,7 @@ function renderStreamers(streamersData) {
     streamersData.forEach(data => {
         const isSponsored = data.username === SPONSORED_STREAMER;
         const isLive = data.isLive;
-        const duration = isLive && data.startTime ? formatDuration(data.startTime) : ""; // Yayın süresini al ve startTime'ın geçerli olup olmadığını kontrol et
+        const duration = isLive && data.startTime ? formatDuration(data.startTime) : "";
 
         const streamerCard = document.createElement('div');
         streamerCard.className = 'streamer-card';
@@ -153,13 +150,18 @@ function renderStreamers(streamersData) {
                 <a href="https://kick.com/${data.username}" class="watch-button" target="_blank">
                     ${isLive ? 'Şimdi İzle' : 'Kanalı Görüntüle'}
                 </a>
-                ${isLive ? `
+                ${isLive && duration ? `
                     <div class="viewer-count">
                         <span class="viewer-icon"></span>
                         ${formatNumber(data.viewers)}
-                        ${duration ? `<span class="live-duration">(${duration})</span>` : ''}
+                        <span class="live-duration">(${duration})</span>
                     </div>
-                ` : ''}
+                ` : (isLive ? `
+                    <div class="viewer-count">
+                        <span class="viewer-icon"></span>
+                        ${formatNumber(data.viewers)}
+                    </div>
+                ` : '')}
             </div>
         `;
 
