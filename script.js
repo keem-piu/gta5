@@ -26,14 +26,14 @@ function formatDuration(startDate) {
     if (!startDate) return "";
     const now = new Date();
     const start = new Date(startDate);
-    const diffSeconds = Math.floor((now.getTime() - start.getTime()) / 1000);
+    const diffSeconds = Math.floor((now - start) / 1000);
 
     const hours = Math.floor(diffSeconds / 3600);
     const minutes = Math.floor((diffSeconds % 3600) / 60);
     const seconds = diffSeconds % 60;
 
     const parts = [];
-    if (hours > 0) parts.push(`${hours}s`);
+    if (hours > 0) parts.push(`${hours}sa`);
     if (minutes > 0 || hours > 0) parts.push(`${minutes}dk`);
     parts.push(`${seconds}sn`);
 
@@ -53,7 +53,7 @@ async function fetchStreamerData(username) {
                 lastStream: data.last_live_at ? formatDate(data.last_live_at) : "Bilinmiyor",
                 title: data.livestream?.session_title || "Kick.com Canlı Yayın",
                 thumbnail: data.livestream?.thumbnail?.url || null,
-                startTime: data.livestream?.created_at ? new Date(data.livestream.created_at) : null
+                startTime: data.livestream?.created_at || null
             };
         }
     } catch (error) {
@@ -150,18 +150,13 @@ function renderStreamers(streamersData) {
                 <a href="https://kick.com/${data.username}" class="watch-button" target="_blank">
                     ${isLive ? 'Şimdi İzle' : 'Kanalı Görüntüle'}
                 </a>
-                ${isLive && duration ? `
+                ${isLive ? `
                     <div class="viewer-count">
                         <span class="viewer-icon"></span>
                         ${formatNumber(data.viewers)}
-                        <span class="live-duration">(${duration})</span>
+                        ${duration ? `<span class="live-duration">(${duration})</span>` : ''}
                     </div>
-                ` : (isLive ? `
-                    <div class="viewer-count">
-                        <span class="viewer-icon"></span>
-                        ${formatNumber(data.viewers)}
-                    </div>
-                ` : '')}
+                ` : ''}
             </div>
         `;
 
