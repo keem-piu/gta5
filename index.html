@@ -179,6 +179,16 @@
             color: #00ff00;
             font-family: monospace;
         }
+        .streamer-category {
+            display: inline-block;
+            background-color: #333344;
+            color: #ccccff;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 11px;
+            margin-left: 8px;
+            font-weight: bold;
+        }
     </style>
 </head>
 <body>
@@ -301,7 +311,8 @@
                         lastStream: data.last_live_at ? formatDate(data.last_live_at) : "Bilinmiyor",
                         title: data.livestream?.session_title || "Kick.com Canlı Yayın",
                         thumbnail: data.livestream?.thumbnail?.url || null,
-                        startTime: startTime
+                        startTime: startTime,
+                        category: data.livestream?.categories?.[0]?.name || "GTA"
                     };
                 } else {
                     console.error(`${username} için hata kodu: ${response.status}`);
@@ -317,7 +328,8 @@
                     lastStream: "Bilinmiyor",
                     title: "Kick.com Canlı yayın",
                     thumbnail: null,
-                    startTime: null
+                    startTime: null,
+                    category: "GTA"
                 };
             }
         }
@@ -336,7 +348,8 @@
                             lastStream: "Bilinmiyor",
                             title: "Kick.com Canlı yayın",
                             thumbnail: null,
-                            startTime: null
+                            startTime: null,
+                            category: "GTA"
                         };
                     })
                 );
@@ -408,6 +421,7 @@
                                 <span class="viewer-icon"></span>
                                 ${formatNumber(data.viewers)}
                                 ${startTime ? `<span class="live-duration">(${formatDuration(startTime)})</span>` : ''}
+                                <span class="streamer-category">${data.category}</span>
                             </div>
                         ` : ''}
                     </div>
