@@ -22,6 +22,24 @@ function formatDate(dateString) {
     return `${diffDays} gün önce`;
 }
 
+function formatDuration(startDate) {
+    if (!startDate) return "";
+    const now = new Date();
+    const start = new Date(startDate);
+    const diffSeconds = Math.floor((now - start) / 1000);
+
+    const hours = Math.floor(diffSeconds / 3600);
+    const minutes = Math.floor((diffSeconds % 3600) / 60);
+    const seconds = diffSeconds % 60;
+
+    const parts = [];
+    if (hours > 0) parts.push(`${hours}s`);
+    if (minutes > 0 || hours > 0) parts.push(`${minutes}dk`);
+    parts.push(`${seconds}sn`);
+
+    return parts.join(" ");
+}
+
 async function fetchStreamerData(username) {
     try {
         const response = await fetch(`https://kick.com/api/v2/channels/${username}`);
@@ -34,7 +52,8 @@ async function fetchStreamerData(username) {
                 followers: formatNumber(data.followers_count),
                 lastStream: data.last_live_at ? formatDate(data.last_live_at) : "Bilinmiyor",
                 title: data.livestream?.session_title || "Kick.com Canlı Yayın",
-                thumbnail: data.livestream?.thumbnail?.url || null
+                thumbnail: data.livestream?.thumbnail?.url || null,
+                startTime: data.livestream?.created_at || null // Yayın başlangıç zamanını al
             };
         }
     } catch (error) {
@@ -47,7 +66,8 @@ async function fetchStreamerData(username) {
         followers: "N/A",
         lastStream: "Bilinmiyor",
         title: "Kick.com Canlı yayın",
-        thumbnail: null
+        thumbnail: null,
+        startTime: null
     };
 }
 
@@ -55,11 +75,11 @@ async function fetchStreamerStats() {
     const stats = {};
     const requests = STATIC_STREAMERS.map(username => fetchStreamerData(username));
     const results = await Promise.all(requests);
-    
+
     results.forEach(data => {
         stats[data.username] = data;
     });
-    
+
     STREAMER_STATS = stats;
     return results;
 }
@@ -107,13 +127,14 @@ function renderStreamers(streamersData) {
     streamersData.forEach(data => {
         const isSponsored = data.username === SPONSORED_STREAMER;
         const isLive = data.isLive;
+        const duration = isLive ? formatDuration(data.startTime) : ""; // Yayın süresini al
 
         const streamerCard = document.createElement('div');
         streamerCard.className = 'streamer-card';
 
         const mediaContent = `
             <div class="streamer-media">
-                ${isLive ? 
+                ${isLive ?
                     `<iframe src="https://player.kick.com/${data.username}"
                                     class="streamer-iframe"
                                     height="180"
@@ -135,6 +156,7 @@ function renderStreamers(streamersData) {
                     <div class="viewer-count">
                         <span class="viewer-icon"></span>
                         ${formatNumber(data.viewers)}
+                        <span style="margin-left: 5px;">(${duration})</span>
                     </div>
                 ` : ''}
             </div>
