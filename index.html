@@ -249,7 +249,6 @@
                 const now = new Date();
                 const start = new Date(startDate);
                 
-                // Tarih kontrolü yap
                 if (isNaN(start.getTime())) {
                     console.error("Geçersiz başlangıç tarihi:", startDate);
                     return "0sn";
@@ -257,7 +256,6 @@
                 
                 const diffSeconds = Math.floor((now - start) / 1000);
                 
-                // Negatif süre kontrolü
                 if (diffSeconds < 0) return "0sn";
 
                 const hours = Math.floor(diffSeconds / 3600);
@@ -278,11 +276,18 @@
 
         async function fetchStreamerData(username) {
             try {
-                const response = await fetch(`https://kick.com/api/v2/channels/${username}`);
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 8000);
+                
+                const response = await fetch(`https://kick.com/api/v2/channels/${username}`, {
+                    signal: controller.signal
+                });
+                
+                clearTimeout(timeoutId);
+                
                 if (response.ok) {
                     const data = await response.json();
                     
-                    // Tarih formatını düzelt
                     let startTime = null;
                     if (data.livestream?.created_at) {
                         startTime = new Date(data.livestream.created_at).toISOString();
@@ -298,33 +303,56 @@
                         thumbnail: data.livestream?.thumbnail?.url || null,
                         startTime: startTime
                     };
+                } else {
+                    console.error(`${username} için hata kodu: ${response.status}`);
+                    throw new Error(`API hatası: ${response.status}`);
                 }
             } catch (error) {
                 console.error(`${username} veri alım hatası:`, error);
+                return {
+                    username: username,
+                    isLive: false,
+                    viewers: 0,
+                    followers: "N/A",
+                    lastStream: "Bilinmiyor",
+                    title: "Kick.com Canlı yayın",
+                    thumbnail: null,
+                    startTime: null
+                };
             }
-            return {
-                username: username,
-                isLive: false,
-                viewers: 0,
-                followers: "N/A",
-                lastStream: "Bilinmiyor",
-                title: "Kick.com Canlı yayın",
-                thumbnail: null,
-                startTime: null
-            };
         }
 
         async function fetchStreamerStats() {
             const stats = {};
-            const requests = STATIC_STREAMERS.map(username => fetchStreamerData(username));
-            const results = await Promise.all(requests);
+            try {
+                const requests = STATIC_STREAMERS.map(username => 
+                    fetchStreamerData(username).catch(e => {
+                        console.error(`${username} veri alınamadı:`, e);
+                        return {
+                            username: username,
+                            isLive: false,
+                            viewers: 0,
+                            followers: "N/A",
+                            lastStream: "Bilinmiyor",
+                            title: "Kick.com Canlı yayın",
+                            thumbnail: null,
+                            startTime: null
+                        };
+                    })
+                );
+                
+                const results = await Promise.all(requests);
+                
+                results.forEach(data => {
+                    stats[data.username] = data;
+                });
 
-            results.forEach(data => {
-                stats[data.username] = data;
-            });
-
-            STREAMER_STATS = stats;
-            return results;
+                STREAMER_STATS = stats;
+                return results;
+            } catch (error) {
+                console.error('Streamer istatistikleri alınamadı:', error);
+                throw error;
+            }
         }
 
         function updateDurationForCard(card, startTime) {
@@ -340,7 +368,6 @@
             const streamerList = document.getElementById('streamer-list');
             streamerList.innerHTML = '';
 
-            // Önceki interval'leri temizle
             Object.values(updateIntervals).forEach(interval => clearInterval(interval));
             Object.keys(updateIntervals).forEach(key => delete updateIntervals[key]);
 
@@ -401,7 +428,6 @@
 
                 streamerList.appendChild(streamerCard);
 
-                // Canlı yayınlarda süreyi güncelle
                 if (isLive && startTime) {
                     updateDurationForCard(streamerCard, startTime);
                     
@@ -418,24 +444,34 @@
         }
 
         async function fetchStreamers() {
-            document.getElementById('loading').style.display = 'block';
-            document.getElementById('error-message').style.display = 'none';
-            document.getElementById('streamer-list').innerHTML = '';
+            const loadingElement = document.getElementById('loading');
+            const errorElement = document.getElementById('error-message');
+            const streamerList = document.getElementById('streamer-list');
+            
+            loadingElement.style.display = 'block';
+            errorElement.style.display = 'none';
+            streamerList.innerHTML = '';
+            errorElement.textContent = '';
 
             try {
                 const streamersData = await fetchStreamerStats();
+                if (streamersData.length === 0) {
+                    throw new Error('Hiç yayıncı verisi alınamadı');
+                }
+                
                 const sortedStreamers = streamersData.sort((a, b) => {
                     if (a.isLive && !b.isLive) return -1;
                     if (!a.isLive && b.isLive) return 1;
                     return b.viewers - a.viewers;
                 });
+                
                 renderStreamers(sortedStreamers);
                 updateTime();
             } catch (error) {
                 console.error('Hata:', error);
                 showError(`Yayınlar yüklenirken bir hata oluştu: ${error.message}`);
             } finally {
-                document.getElementById('loading').style.display = 'none';
+                loadingElement.style.display = 'none';
             }
         }
 
@@ -455,6 +491,6 @@
             fetchStreamers();
             setInterval(fetchStreamers, 300000); // 5 dakikada bir güncelle
         });
-    <script src="script.js"></script>
+    </script>
 </body>
 </html>
