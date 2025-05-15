@@ -150,11 +150,20 @@ h1 {
 }
 .offline-placeholder {
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
     height: 100%;
     color: #aaaaaa;
     font-size: 16px;
+    gap: 10px;
+}
+.profile-image {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 3px solid #00ff00;
 }
 .sponsored-badge {
     position: absolute;
