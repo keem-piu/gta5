@@ -26,8 +26,9 @@ function formatDuration(startDate) {
     if (!startDate) return "";
     const now = new Date();
     const start = new Date(startDate);
-    const diffSeconds = Math.floor((now - start) / 1000);
-
+    // Yayın başlangıç zamanı ile şu anki zaman arasındaki farkı milisaniye cinsinden al
+    const diffMilliseconds = now.getTime() - start.getTime();
+    const diffSeconds = Math.floor(diffMilliseconds / 1000);
     const hours = Math.floor(diffSeconds / 3600);
     const minutes = Math.floor((diffSeconds % 3600) / 60);
     const seconds = diffSeconds % 60;
@@ -53,7 +54,7 @@ async function fetchStreamerData(username) {
                 lastStream: data.last_live_at ? formatDate(data.last_live_at) : "Bilinmiyor",
                 title: data.livestream?.session_title || "Kick.com Canlı Yayın",
                 thumbnail: data.livestream?.thumbnail?.url || null,
-                startTime: data.livestream?.created_at || null // Yayın başlangıç zamanını al
+                startTime: data.livestream?.created_at ? new Date(data.livestream.created_at) : null // Yayın başlangıç zamanını Date nesnesi olarak al
             };
         }
     } catch (error) {
@@ -127,7 +128,7 @@ function renderStreamers(streamersData) {
     streamersData.forEach(data => {
         const isSponsored = data.username === SPONSORED_STREAMER;
         const isLive = data.isLive;
-        const duration = isLive ? formatDuration(data.startTime) : ""; // Yayın süresini al
+        const duration = isLive && data.startTime ? formatDuration(data.startTime) : ""; // Yayın süresini al ve startTime'ın geçerli olup olmadığını kontrol et
 
         const streamerCard = document.createElement('div');
         streamerCard.className = 'streamer-card';
@@ -156,7 +157,7 @@ function renderStreamers(streamersData) {
                     <div class="viewer-count">
                         <span class="viewer-icon"></span>
                         ${formatNumber(data.viewers)}
-                        <span style="margin-left: 5px;">(${duration})</span>
+                        ${duration ? `<span class="live-duration">(${duration})</span>` : ''}
                     </div>
                 ` : ''}
             </div>
