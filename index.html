@@ -107,6 +107,15 @@
             border: 2px solid var(--primary);
         }
         
+        .profile-image {
+            width: 100px;
+            height: 100px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 3px solid var(--primary);
+            background-color: #1a1a24;
+        }
+        
         .streamer-title {
             font-size: 0.95rem;
             margin-bottom: 15px;
@@ -218,15 +227,6 @@
             gap: 10px;
         }
         
-        .profile-image {
-            width: 100px;
-            height: 100px;
-            border-radius: 50%;
-            object-fit: cover;
-            border: 3px solid var(--primary);
-            background-color: #1a1a24;
-        }
-        
         .sponsored-badge {
             position: absolute;
             top: 12px;
@@ -329,6 +329,19 @@
             "orhunpaso", "mordredsly", "hudsoonn", "cagatayk", "phriksos"
         ];
 
+        // Özel profil resimleri
+        const PROFILE_IMAGES = {
+            "flavorr": "https://files.kick.com/images/user/1094110/profile_image/conversion/6fdd7991-a34d-4bfb-9b20-ff51629b1eda-fullsize.webp",
+            "phriksos": "https://files.kick.com/images/user/1094110/profile_image/conversion/6fdd7991-a34d-4bfb-9b20-ff51629b1eda-fullsize.webp",
+            "asepos": "https://images.kick.com/channels/asepos/profile_small",
+            "limonvari": "https://images.kick.com/channels/limonvari/profile_small",
+            "x4te": "https://images.kick.com/channels/x4te/profile_small",
+            "egemenfx": "https://images.kick.com/channels/egemenfx/profile_small",
+            "chavohaze": "https://images.kick.com/channels/chavohaze/profile_small",
+            "diorr35": "https://images.kick.com/channels/diorr35/profile_small"
+            // Diğer streamer'lar için de ekleyebilirsiniz
+        };
+
         let STREAMER_STATS = {};
         const SPONSORED_STREAMER = "phriksos";
         const updateIntervals = {};
@@ -384,12 +397,44 @@
         }
 
         function getProfilePictureUrl(username) {
-            // Updated with cache busting and alternative URL format
+            // Özel resmi olan streamer'lar için
+            if (PROFILE_IMAGES[username]) {
+                return [PROFILE_IMAGES[username]];
+            }
+
+            // Diğerleri için alternatif URL'ler
             const timestamp = Date.now();
             return [
                 `https://images.kick.com/channels/${username}/profile_small?${timestamp}`,
-                `https://kick.com/api/v1/channels/${username}/avatar?${timestamp}`
+                `https://kick.com/api/v2/channels/${username}/avatar`,
+                `https://kick.com/api/v1/channels/${username}/avatar?${timestamp}`,
+                `https://dbxmjjzl5pc1g.cloudfront.net/${username}/profile_small.webp?${timestamp}`,
+                `https://d1fdloi71mui9q.cloudfront.net/${username}/profile_small.webp?${timestamp}`,
+                `https://ui-avatars.com/api/?name=${username}&background=1a1a24&color=53fc18`,
+                `https://via.placeholder.com/150/1a1a24/53fc18?text=${username.slice(0,2)}`
             ];
+        }
+
+        function createImageElement(urls, alt, className, placeholderUrl) {
+            const img = document.createElement('img');
+            img.className = className;
+            img.alt = alt;
+            img.loading = 'lazy';
+            
+            let currentIndex = 0;
+            
+            function tryNextUrl() {
+                if (currentIndex < urls.length) {
+                    img.src = urls[currentIndex++];
+                } else {
+                    img.src = placeholderUrl;
+                }
+            }
+            
+            img.onerror = tryNextUrl;
+            tryNextUrl();
+            
+            return img;
         }
 
         async function fetchStreamerData(username) {
@@ -482,19 +527,6 @@
             }
         }
 
-        function createImageElement(url, alt, className, fallback) {
-            const img = document.createElement('img');
-            img.src = url;
-            img.alt = alt;
-            img.className = className;
-            img.onerror = function() {
-                if (fallback && this.src !== fallback) {
-                    this.src = fallback;
-                }
-            };
-            return img;
-        }
-
         function renderStreamers(streamersData) {
             const streamerList = document.getElementById('streamer-list');
             streamerList.innerHTML = '';
@@ -538,21 +570,12 @@
                     const offlineDiv = document.createElement('div');
                     offlineDiv.className = 'offline-placeholder';
                     
-                    // Try multiple profile picture URLs before falling back to placeholder
                     const profileImg = createImageElement(
-                        data.profilePicUrls[0], 
-                        data.username, 
+                        data.profilePicUrls,
+                        data.username,
                         'profile-image',
-                        data.profilePicUrls[1] || placeholderUrl
+                        placeholderUrl
                     );
-                    
-                    profileImg.onerror = function() {
-                        if (data.profilePicUrls[1] && this.src !== data.profilePicUrls[1]) {
-                            this.src = data.profilePicUrls[1];
-                        } else {
-                            this.src = placeholderUrl;
-                        }
-                    };
                     
                     offlineDiv.appendChild(profileImg);
                     
@@ -580,19 +603,11 @@
                 nameDiv.className = 'streamer-name';
                 
                 const avatarImg = createImageElement(
-                    data.profilePicUrls[0],
+                    data.profilePicUrls,
                     data.username,
                     'streamer-avatar',
-                    data.profilePicUrls[1] || smallPlaceholderUrl
+                    smallPlaceholderUrl
                 );
-                
-                avatarImg.onerror = function() {
-                    if (data.profilePicUrls[1] && this.src !== data.profilePicUrls[1]) {
-                        this.src = data.profilePicUrls[1];
-                    } else {
-                        this.src = smallPlaceholderUrl;
-                    }
-                };
                 
                 nameDiv.appendChild(avatarImg);
                 nameDiv.appendChild(document.createTextNode(data.username));
