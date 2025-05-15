@@ -99,6 +99,14 @@
             gap: 8px;
         }
         
+        .streamer-avatar {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 2px solid var(--primary);
+        }
+        
         .streamer-title {
             font-size: 0.95rem;
             margin-bottom: 15px;
@@ -211,11 +219,12 @@
         }
         
         .profile-image {
-            width: 80px;
-            height: 80px;
+            width: 100px;
+            height: 100px;
             border-radius: 50%;
             object-fit: cover;
             border: 3px solid var(--primary);
+            background-color: #1a1a24;
         }
         
         .sponsored-badge {
@@ -374,14 +383,13 @@
             }
         }
 
-        async function getProfilePicture(username) {
-            try {
-                // Kick'in yeni profil resmi URL yapısı
-                return `https://images.kick.com/channels/${username}/profile_small`;
-            } catch (error) {
-                console.error(`${username} profil resmi alınamadı:`, error);
-                return `https://via.placeholder.com/100/1a1a24/00ff00?text=${username.slice(0, 2).toUpperCase()}`;
-            }
+        function getProfilePictureUrl(username) {
+            // Updated with cache busting and alternative URL format
+            const timestamp = Date.now();
+            return [
+                `https://images.kick.com/channels/${username}/profile_small?${timestamp}`,
+                `https://kick.com/api/v1/channels/${username}/avatar?${timestamp}`
+            ];
         }
 
         async function fetchStreamerData(username) {
@@ -393,37 +401,25 @@
                 }
                 
                 const data = await response.json();
-                
-                // Canlı yayın bilgilerini kontrol et
-                const isLive = data.livestream?.is_live || false;
-                let startTime = null;
-                let viewers = 0;
-                let title = "Kick.com Canlı Yayın";
-                let category = "GTA";
-                
-                if (isLive) {
-                    startTime = data.livestream?.created_at || null;
-                    viewers = data.livestream?.viewer_count || 0;
-                    title = data.livestream?.session_title || title;
-                    category = data.livestream?.categories?.[0]?.name || category;
-                }
-                
-                const profilePic = await getProfilePicture(username);
+                const profilePicUrls = getProfilePictureUrl(username);
+                const initials = username.slice(0, 2).toUpperCase();
                 
                 return {
                     username: username,
-                    isLive: isLive,
-                    viewers: viewers,
+                    isLive: data.livestream?.is_live || false,
+                    viewers: data.livestream?.viewer_count || 0,
                     followers: formatNumber(data.followers_count || 0),
                     lastStream: data.last_live_at ? formatDate(data.last_live_at) : "Hiç yayın yapmadı",
-                    title: title,
+                    title: data.livestream?.session_title || `${username} Kanalı`,
                     thumbnail: data.livestream?.thumbnail?.url || null,
-                    startTime: startTime,
-                    category: category,
-                    profilePic: profilePic
+                    startTime: data.livestream?.created_at || null,
+                    category: data.livestream?.categories?.[0]?.name || "GTA",
+                    profilePicUrls: profilePicUrls,
+                    initials: initials
                 };
             } catch (error) {
                 console.error(`${username} veri alım hatası:`, error);
+                const initials = username.slice(0, 2).toUpperCase();
                 return {
                     username: username,
                     isLive: false,
@@ -434,7 +430,8 @@
                     thumbnail: null,
                     startTime: null,
                     category: "GTA",
-                    profilePic: await getProfilePicture(username)
+                    profilePicUrls: [`https://via.placeholder.com/150/1a1a24/00ff00?text=${initials}`],
+                    initials: initials
                 };
             }
         }
@@ -442,10 +439,10 @@
         async function fetchStreamerStats() {
             const stats = {};
             try {
-                // Tüm yayıncı verilerini paralel olarak al
                 const requests = STATIC_STREAMERS.map(username => 
                     fetchStreamerData(username).catch(e => {
                         console.error(`${username} veri alınamadı:`, e);
+                        const initials = username.slice(0, 2).toUpperCase();
                         return {
                             username: username,
                             isLive: false,
@@ -456,7 +453,8 @@
                             thumbnail: null,
                             startTime: null,
                             category: "GTA",
-                            profilePic: `https://via.placeholder.com/100/1a1a24/00ff00?text=${username.slice(0, 2).toUpperCase()}`
+                            profilePicUrls: [`https://via.placeholder.com/150/1a1a24/00ff00?text=${initials}`],
+                            initials: initials
                         };
                     })
                 );
@@ -484,6 +482,19 @@
             }
         }
 
+        function createImageElement(url, alt, className, fallback) {
+            const img = document.createElement('img');
+            img.src = url;
+            img.alt = alt;
+            img.className = className;
+            img.onerror = function() {
+                if (fallback && this.src !== fallback) {
+                    this.src = fallback;
+                }
+            };
+            return img;
+        }
+
         function renderStreamers(streamersData) {
             const streamerList = document.getElementById('streamer-list');
             streamerList.innerHTML = '';
@@ -495,6 +506,8 @@
                 const isSponsored = data.username === SPONSORED_STREAMER;
                 const isLive = data.isLive;
                 const startTime = data.startTime;
+                const placeholderUrl = `https://via.placeholder.com/150/1a1a24/00ff00?text=${data.initials}`;
+                const smallPlaceholderUrl = `https://via.placeholder.com/30/1a1a24/00ff00?text=${data.initials}`;
 
                 const streamerCard = document.createElement('div');
                 streamerCard.className = 'streamer-card';
@@ -503,53 +516,150 @@
                     streamerCard.dataset.startTime = startTime;
                 }
 
-                const mediaContent = `
-                    <div class="streamer-media">
-                        ${isLive ?
-                            `<iframe src="https://player.kick.com/${data.username}"
-                                            class="streamer-iframe"
-                                            height="180"
-                                            frameborder="0"
-                                            scrolling="no"
-                                            allowfullscreen="true"></iframe>
-                                        <div class="live-badge">CANLI</div>` :
-                            `<div class="offline-placeholder">
-                                <img src="${data.profilePic}" alt="${data.username}" class="profile-image" onerror="this.src='https://via.placeholder.com/100/1a1a24/00ff00?text=${data.username.slice(0, 2).toUpperCase()}'">
-                                <div class="offline-status">ÇEVRİMDIŞI</div>
-                            </div>`}
-                        ${isSponsored ? '<div class="sponsored-badge">SPONSOR</div>' : ''}
-                    </div>
-                `;
+                // Create media content
+                const mediaDiv = document.createElement('div');
+                mediaDiv.className = 'streamer-media';
+                
+                if (isLive) {
+                    const iframe = document.createElement('iframe');
+                    iframe.src = `https://player.kick.com/${data.username}`;
+                    iframe.className = 'streamer-iframe';
+                    iframe.height = '180';
+                    iframe.setAttribute('frameborder', '0');
+                    iframe.setAttribute('scrolling', 'no');
+                    iframe.setAttribute('allowfullscreen', 'true');
+                    mediaDiv.appendChild(iframe);
+                    
+                    const liveBadge = document.createElement('div');
+                    liveBadge.className = 'live-badge';
+                    liveBadge.textContent = 'CANLI';
+                    mediaDiv.appendChild(liveBadge);
+                } else {
+                    const offlineDiv = document.createElement('div');
+                    offlineDiv.className = 'offline-placeholder';
+                    
+                    // Try multiple profile picture URLs before falling back to placeholder
+                    const profileImg = createImageElement(
+                        data.profilePicUrls[0], 
+                        data.username, 
+                        'profile-image',
+                        data.profilePicUrls[1] || placeholderUrl
+                    );
+                    
+                    profileImg.onerror = function() {
+                        if (data.profilePicUrls[1] && this.src !== data.profilePicUrls[1]) {
+                            this.src = data.profilePicUrls[1];
+                        } else {
+                            this.src = placeholderUrl;
+                        }
+                    };
+                    
+                    offlineDiv.appendChild(profileImg);
+                    
+                    const offlineStatus = document.createElement('div');
+                    offlineStatus.className = 'offline-status';
+                    offlineStatus.textContent = 'ÇEVRİMDIŞI';
+                    offlineDiv.appendChild(offlineStatus);
+                    
+                    mediaDiv.appendChild(offlineDiv);
+                }
 
-                const metaContent = `
-                    <div class="streamer-meta">
-                        <a href="https://kick.com/${data.username}" class="watch-button" target="_blank">
-                            ${isLive ? 'İZLE' : 'KANAL'}
-                        </a>
-                        ${isLive ? `
-                            <div class="viewer-count">
-                                <span class="viewer-icon"></span>
-                                ${formatNumber(data.viewers)}
-                            </div>
-                            ${startTime ? `<div class="live-duration">${formatDuration(startTime)}</div>` : ''}
-                            <div class="streamer-category">${data.category}</div>
-                        ` : ''}
-                    </div>
-                `;
+                if (isSponsored) {
+                    const sponsoredBadge = document.createElement('div');
+                    sponsoredBadge.className = 'sponsored-badge';
+                    sponsoredBadge.textContent = 'SPONSOR';
+                    mediaDiv.appendChild(sponsoredBadge);
+                }
 
-                streamerCard.innerHTML = `
-                    ${mediaContent}
-                    <div class="streamer-info">
-                        <div class="streamer-name">${data.username}</div>
-                        <div class="streamer-title">${data.title}</div>
-                        ${metaContent}
-                        <div class="streamer-stats">
-                            <div>${data.followers} takipçi</div>
-                            <div class="streamer-last-stream">${isLive ? "Şu anda yayında" : `Son yayın: ${data.lastStream}`}</div>
-                        </div>
-                    </div>
-                `;
-
+                // Create info content
+                const infoDiv = document.createElement('div');
+                infoDiv.className = 'streamer-info';
+                
+                // Name section
+                const nameDiv = document.createElement('div');
+                nameDiv.className = 'streamer-name';
+                
+                const avatarImg = createImageElement(
+                    data.profilePicUrls[0],
+                    data.username,
+                    'streamer-avatar',
+                    data.profilePicUrls[1] || smallPlaceholderUrl
+                );
+                
+                avatarImg.onerror = function() {
+                    if (data.profilePicUrls[1] && this.src !== data.profilePicUrls[1]) {
+                        this.src = data.profilePicUrls[1];
+                    } else {
+                        this.src = smallPlaceholderUrl;
+                    }
+                };
+                
+                nameDiv.appendChild(avatarImg);
+                nameDiv.appendChild(document.createTextNode(data.username));
+                infoDiv.appendChild(nameDiv);
+                
+                // Title section
+                const titleDiv = document.createElement('div');
+                titleDiv.className = 'streamer-title';
+                titleDiv.textContent = data.title;
+                infoDiv.appendChild(titleDiv);
+                
+                // Meta section
+                const metaDiv = document.createElement('div');
+                metaDiv.className = 'streamer-meta';
+                
+                const watchButton = document.createElement('a');
+                watchButton.href = `https://kick.com/${data.username}`;
+                watchButton.className = 'watch-button';
+                watchButton.textContent = isLive ? 'İZLE' : 'KANAL';
+                watchButton.target = '_blank';
+                metaDiv.appendChild(watchButton);
+                
+                if (isLive) {
+                    const viewerCount = document.createElement('div');
+                    viewerCount.className = 'viewer-count';
+                    
+                    const viewerIcon = document.createElement('span');
+                    viewerIcon.className = 'viewer-icon';
+                    viewerCount.appendChild(viewerIcon);
+                    
+                    viewerCount.appendChild(document.createTextNode(formatNumber(data.viewers)));
+                    metaDiv.appendChild(viewerCount);
+                    
+                    if (startTime) {
+                        const durationDiv = document.createElement('div');
+                        durationDiv.className = 'live-duration';
+                        durationDiv.textContent = formatDuration(startTime);
+                        metaDiv.appendChild(durationDiv);
+                    }
+                    
+                    const categoryDiv = document.createElement('div');
+                    categoryDiv.className = 'streamer-category';
+                    categoryDiv.textContent = data.category;
+                    metaDiv.appendChild(categoryDiv);
+                }
+                
+                infoDiv.appendChild(metaDiv);
+                
+                // Stats section
+                const statsDiv = document.createElement('div');
+                statsDiv.className = 'streamer-stats';
+                
+                const followersDiv = document.createElement('div');
+                followersDiv.textContent = `${data.followers} takipçi`;
+                statsDiv.appendChild(followersDiv);
+                
+                const lastStreamDiv = document.createElement('div');
+                lastStreamDiv.className = 'streamer-last-stream';
+                lastStreamDiv.textContent = isLive ? "Şu anda yayında" : `Son yayın: ${data.lastStream}`;
+                statsDiv.appendChild(lastStreamDiv);
+                
+                infoDiv.appendChild(statsDiv);
+                
+                // Assemble the card
+                streamerCard.appendChild(mediaDiv);
+                streamerCard.appendChild(infoDiv);
+                
                 streamerList.appendChild(streamerCard);
 
                 if (isLive && startTime) {
@@ -583,7 +693,6 @@
                     throw new Error('Hiç yayıncı verisi alınamadı');
                 }
                 
-                // Canlı yayınları öne alarak sırala
                 const sortedStreamers = streamersData.sort((a, b) => {
                     if (a.isLive && !b.isLive) return -1;
                     if (!a.isLive && b.isLive) return 1;
