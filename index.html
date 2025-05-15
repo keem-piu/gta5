@@ -79,6 +79,12 @@
             font-size: 12px;
             color: #aaaaaa;
         }
+        .watch-button-container {
+            display: flex;
+            align-items: center;
+            margin-top: 10px;
+            gap: 10px;
+        }
         .watch-button {
             display: inline-block;
             background-color: #00ff00;
@@ -87,11 +93,27 @@
             border-radius: 4px;
             text-decoration: none;
             font-weight: bold;
-            margin-top: 10px;
             transition: background-color 0.3s;
+            flex-shrink: 0;
         }
         .watch-button:hover {
             background-color: #00cc00;
+        }
+        .viewer-count {
+            font-size: 12px;
+            background-color: #2a2a35;
+            padding: 5px 10px;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+        }
+        .viewer-icon {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            background-color: #ff5555;
+            border-radius: 50%;
+            margin-right: 5px;
         }
         .last-updated {
             text-align: center;
@@ -141,6 +163,17 @@
             color: #aaaaaa;
             font-size: 16px;
         }
+        .sponsored-badge {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background-color: gold;
+            color: black;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: bold;
+        }
     </style>
 </head>
 <body>
@@ -168,7 +201,7 @@
     <script>
         const STATIC_STREAMERS = [
             "orumcekenver",
-            "flavorr", "rod4n", "mordredsly", "qafsiiel", "cagatayk", "cagatayk", "flavorr",
+            "flavorr", "rod4n", "mordredsly", "qafsiiel", "cagatayk",
             "phriksos"
         ];
 
@@ -200,6 +233,7 @@
                     return {
                         username: username,
                         isLive: data.livestream?.is_live || false,
+                        viewers: data.livestream?.viewer_count || 0,
                         followers: formatNumber(data.followers_count),
                         lastStream: data.last_live_at ? formatDate(data.last_live_at) : "Bilinmiyor",
                         title: data.livestream?.session_title || "Kick.com Canlı Yayın",
@@ -212,9 +246,10 @@
             return {
                 username: username,
                 isLive: false,
+                viewers: 0,
                 followers: "N/A",
                 lastStream: "Bilinmiyor",
-                title: "Kick.com Canlı Yayın",
+                title: "Kick.com Canlı yayın",
                 thumbnail: null
             };
         }
@@ -243,7 +278,8 @@
                 const sortedStreamers = streamersData.sort((a, b) => {
                     if (a.isLive && !b.isLive) return -1;
                     if (!a.isLive && b.isLive) return 1;
-                    return 0;
+                    // Aynı durumdaysa izleyici sayısına göre sırala
+                    return b.viewers - a.viewers;
                 });
                 renderStreamers(sortedStreamers);
                 updateTime();
@@ -289,7 +325,21 @@
                                     allowfullscreen="true"></iframe>
                              <div class="live-badge">CANLI</div>` :
                             `<div class="offline-placeholder">ÇEVRİMDIŞI</div>`}
-                        ${isSponsored ? '<span style="position: absolute; top: 10px; right: 10px; background-color: gold; color: black; padding: 3px 8px; border-radius: 4px; font-size: 12px; font-weight: bold;">SPONSOR</span>' : ''}
+                        ${isSponsored ? '<div class="sponsored-badge">SPONSOR</div>' : ''}
+                    </div>
+                `;
+
+                const watchButtonContent = `
+                    <div class="watch-button-container">
+                        <a href="https://kick.com/${data.username}" class="watch-button" target="_blank">
+                            ${isLive ? 'Watch Now' : 'View Channel'}
+                        </a>
+                        ${isLive ? `
+                            <div class="viewer-count">
+                                <span class="viewer-icon"></span>
+                                ${formatNumber(data.viewers)}
+                            </div>
+                        ` : ''}
                     </div>
                 `;
 
@@ -302,7 +352,7 @@
                             <div>${data.followers} takipçi</div>
                             <div class="streamer-last-stream">${isLive ? "Şu anda yayında" : `Son yayın: ${data.lastStream}`}</div>
                         </div>
-                        <a href="https://kick.com/${data.username}" class="watch-button" target="_blank">Kanalı Aç</a>
+                        ${watchButtonContent}
                     </div>
                 `;
 
