@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Kick.com GTA Canlı Yayınları</title>
     <style>
-        /* CSS kodu öncekiyle aynı */
         :root {
             --primary: #53fc18;
             --primary-dark: #00cc00;
@@ -74,12 +73,15 @@
         
         .streamer-media {
             width: 100%;
-            height: 180px;
+            aspect-ratio: 16/9;
             position: relative;
             background-color: #2a2a35;
         }
         
         .streamer-iframe {
+            position: absolute;
+            top: 0;
+            left: 0;
             width: 100%;
             height: 100%;
             border: none;
@@ -218,11 +220,15 @@
         }
         
         .offline-placeholder {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            height: 100%;
             color: var(--text-secondary);
             font-size: 1rem;
             gap: 10px;
@@ -238,6 +244,7 @@
             border-radius: 4px;
             font-size: 0.75rem;
             font-weight: 700;
+            z-index: 1;
         }
         
         .last-updated {
@@ -283,10 +290,6 @@
         @media (max-width: 768px) {
             .streamer-list {
                 grid-template-columns: 1fr;
-            }
-            
-            .streamer-media {
-                height: 200px;
             }
         }
     </style>
@@ -354,7 +357,6 @@
         }
 
         function parseKickDate(dateString) {
-            // Kick.com'un tarih formatını düzgün parse et
             return new Date(dateString.replace(' ', 'T') + 'Z');
         }
 
@@ -372,7 +374,6 @@
                 const minutes = Math.floor((totalSeconds % 3600) / 60);
                 const seconds = totalSeconds % 60;
 
-                // 2 haneli format için padStart kullan
                 const pad = (num) => num.toString().padStart(2, '0');
                 return `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
             } catch (e) {
