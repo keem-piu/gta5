@@ -64,6 +64,9 @@
             overflow: hidden;
             transition: all 0.3s ease;
             box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            display: flex;
+            flex-direction: column;
+            height: 100%;
         }
         
         .streamer-card:hover {
@@ -93,6 +96,7 @@
             display: flex;
             flex-direction: column;
             gap: 12px;
+            flex-grow: 1;
         }
         
         .streamer-header {
@@ -112,6 +116,7 @@
         
         .streamer-name-container {
             flex-grow: 1;
+            min-height: 50px;
         }
         
         .streamer-name {
@@ -136,6 +141,7 @@
             align-items: center;
             gap: 10px;
             flex-wrap: wrap;
+            margin-top: auto;
         }
         
         .streamer-category {
@@ -192,7 +198,8 @@
             font-weight: 600;
             transition: background-color 0.2s;
             font-size: 0.9rem;
-            margin-top: 10px;
+            margin-top: auto;
+            width: 100%;
         }
         
         .watch-button:hover {
