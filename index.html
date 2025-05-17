@@ -441,7 +441,7 @@
         const CONFIG = {
             API_BASE_URL: "https://kick.com/api/v2/channels/",
             REFRESH_INTERVAL: 5 * 60 * 1000, // 5 dakika
-            BATCH_SIZE: 5, // Aynı anda yapılacak maksimum istek sayısı
+            BATCH_SIZE: 10, // Aynı anda yapılacak maksimum istek sayısı (artırıldı)
             STATIC_STREAMERS: [
                 "burakg", "asepos", "limonvari", "x4te", "egemenfx", "chavohaze", "diorr35", 
                 "justwicky", "canarkhu", "thekolpa", "aka", "gogo", "fjorgyn", "diana0035",
@@ -458,14 +458,16 @@
                 "whatthemilqa", "sakuraipek", "parlochef", "mralpkaan", "ammoarmen", "orumcekenver",
                 "beratarsllan", "orhunpaso", "mordredsly", "hudsoonn", "cagatayk", "phriksos"
             ],
-            SPONSORED_STREAMER: "phriksos"
+            SPONSORED_STREAMER: "phriksos",
+            CACHE_TTL: 24 * 60 * 60 * 1000 // 24 saat
         };
 
         // Uygulama Durumu
         const APP_STATE = {
             streamerStats: {},
             updateIntervals: {},
-            profileImageCache: {}
+            profileImageCache: {},
+            observer: null
         };
 
         // Yardımcı Fonksiyonlar
@@ -480,10 +482,10 @@
                        `${Math.floor(diffHours / 24)} gün önce`;
             },
             
-            formatDuration: (startDate) => {
-                if (!startDate) return "00:00:00";
+            formatDuration: (startTime) => {
+                if (!startTime) return "00:00:00";
                 try {
-                    const diffMs = Math.max(0, Date.now() - new Date(startDate.replace(' ', 'T') + 'Z'));
+                    const diffMs = Math.max(0, Date.now() - new Date(startTime.replace(' ', 'T') + 'Z'));
                     const totalSeconds = Math.floor(diffMs / 1000);
                     const pad = num => num.toString().padStart(2, '0');
                     return `${pad(Math.floor(totalSeconds / 3600))}:${pad(Math.floor((totalSeconds % 3600) / 60))}:${pad(totalSeconds % 60)}`;
@@ -526,14 +528,44 @@
                     svg.appendChild(path);
                 });
                 return svg;
+            },
+            
+            getCachedData: (key) => {
+                try {
+                    const item = localStorage.getItem(`kick-gta-${key}`);
+                    if (!item) return null;
+                    
+                    const { value, timestamp } = JSON.parse(item);
+                    if (Date.now() - timestamp > CONFIG.CACHE_TTL) {
+                        localStorage.removeItem(`kick-gta-${key}`);
+                        return null;
+                    }
+                    
+                    return value;
+                } catch (e) {
+                    return null;
+                }
+            },
+            
+            setCachedData: (key, value) => {
+                try {
+                    localStorage.setItem(`kick-gta-${key}`, JSON.stringify({
+                        value,
+                        timestamp: Date.now()
+                    }));
+                } catch (e) {
+                    console.error("Önbelleğe yazma hatası:", e);
+                }
             }
         };
 
         // API İşlemleri
         const API = {
             getProfilePictureUrl: async (username) => {
-                if (APP_STATE.profileImageCache[username]) {
-                    return APP_STATE.profileImageCache[username];
+                // Önce önbelleği kontrol et
+                const cachedUrls = Utils.getCachedData(`profile-${username}`);
+                if (cachedUrls) {
+                    return cachedUrls;
                 }
 
                 try {
@@ -542,8 +574,11 @@
                     
                     const data = await response.json();
                     const profileUrl = (data.user.profile_pic || `https://images.kick.com/channels/${username}/profile_small`).split('?')[0];
-                    APP_STATE.profileImageCache[username] = [profileUrl];
-                    return [profileUrl];
+                    const urls = [profileUrl];
+                    
+                    // Önbelleğe al
+                    Utils.setCachedData(`profile-${username}`, urls);
+                    return urls;
                 } catch (error) {
                     console.error(`${username} profil resmi alınamadı:`, error);
                     const initials = username.slice(0, 2).toUpperCase();
@@ -606,9 +641,20 @@
                 const results = [];
                 
                 try {
+                    // Önbellekten canlı olan yayıncıları kontrol et
+                    const cachedLiveStreamers = Utils.getCachedData('live-streamers') || [];
+                    
                     // İstekleri gruplar halinde yap
                     for (let i = 0; i < CONFIG.STATIC_STREAMERS.length; i += CONFIG.BATCH_SIZE) {
                         const batch = CONFIG.STATIC_STREAMERS.slice(i, i + CONFIG.BATCH_SIZE);
+                        
+                        // Önbellekte canlı olanları önceliklendir
+                        batch.sort((a, b) => {
+                            const aIsCachedLive = cachedLiveStreamers.includes(a);
+                            const bIsCachedLive = cachedLiveStreamers.includes(b);
+                            return bIsCachedLive - aIsCachedLive;
+                        });
+                        
                         const batchRequests = batch.map(username => 
                             API.fetchStreamerData(username).catch(e => {
                                 console.error(`${username} veri alınamadı:`, e);
@@ -618,13 +664,12 @@
                         
                         const batchResults = await Promise.all(batchRequests);
                         results.push(...batchResults);
-                        
-                        // Bir sonraki batch öncesi bekle
-                        if (i + CONFIG.BATCH_SIZE < CONFIG.STATIC_STREAMERS.length) {
-                            await new Promise(resolve => setTimeout(resolve, 1000));
-                        }
                     }
 
+                    // Canlı olan yayıncıları önbelleğe al
+                    const liveStreamers = results.filter(s => s.isLive).map(s => s.username);
+                    Utils.setCachedData('live-streamers', liveStreamers);
+                    
                     results.forEach(data => stats[data.username] = data);
                     APP_STATE.streamerStats = stats;
                     return results;
@@ -683,6 +728,9 @@
                 offlineStreamers.forEach(streamer => {
                     UI.renderStreamerCard(streamer, false);
                 });
+
+                // Intersection Observer'ı başlat
+                UI.initIntersectionObserver();
             },
 
             renderStreamerCard: (data, isSponsored) => {
@@ -703,12 +751,14 @@
                 mediaDiv.className = 'streamer-media';
                 
                 if (isLive) {
-                    const iframe = document.createElement('iframe');
-                    iframe.src = `https://player.kick.com/${data.username}?autoplay=true&muted=true`;
-                    iframe.className = 'streamer-iframe';
-                    iframe.setAttribute('frameborder', '0');
-                    iframe.setAttribute('allowfullscreen', 'true');
-                    mediaDiv.appendChild(iframe);
+                    // Iframe yerine önce bir placeholder ekleyelim
+                    const placeholder = document.createElement('div');
+                    placeholder.className = 'iframe-placeholder';
+                    placeholder.style.width = '100%';
+                    placeholder.style.height = '100%';
+                    placeholder.style.backgroundColor = '#2a2a35';
+                    placeholder.dataset.username = data.username;
+                    mediaDiv.appendChild(placeholder);
                     
                     const liveBadge = document.createElement('div');
                     liveBadge.className = 'live-badge';
@@ -844,6 +894,40 @@
                 }
             },
 
+            initIntersectionObserver: () => {
+                if (APP_STATE.observer) {
+                    APP_STATE.observer.disconnect();
+                }
+
+                APP_STATE.observer = new IntersectionObserver((entries) => {
+                    entries.forEach(entry => {
+                        if (entry.isIntersecting) {
+                            const placeholder = entry.target;
+                            const username = placeholder.dataset.username;
+                            
+                            // Iframe'i oluştur ve placeholder'ı değiştir
+                            const iframe = document.createElement('iframe');
+                            iframe.src = `https://player.kick.com/${username}?autoplay=true&muted=true`;
+                            iframe.className = 'streamer-iframe';
+                            iframe.setAttribute('frameborder', '0');
+                            iframe.setAttribute('allowfullscreen', 'true');
+                            iframe.loading = 'lazy';
+                            
+                            placeholder.replaceWith(iframe);
+                            APP_STATE.observer.unobserve(placeholder);
+                        }
+                    });
+                }, {
+                    rootMargin: '200px', // Görüntü alanına girmeden önce yükle
+                    threshold: 0.1
+                });
+
+                // Tüm iframe placeholder'larını gözle
+                document.querySelectorAll('.iframe-placeholder').forEach(el => {
+                    APP_STATE.observer.observe(el);
+                });
+            },
+
             showError: (message) => {
                 const errorElement = document.getElementById('error-message');
                 errorElement.textContent = message;
@@ -890,8 +974,23 @@
             },
 
             init: () => {
+                // İlk yükleme
                 App.fetchStreamers();
-                setInterval(App.fetchStreamers, CONFIG.REFRESH_INTERVAL);
+                
+                // Periyodik güncelleme
+                setInterval(() => {
+                    // Sadece canlı yayınları kontrol et
+                    const liveUsernames = Object.values(APP_STATE.streamerStats)
+                        .filter(s => s.isLive)
+                        .map(s => s.username);
+                    
+                    if (liveUsernames.length > 0) {
+                        App.fetchStreamers();
+                    } else {
+                        // Canlı yayın yoksa daha uzun aralıklarla kontrol et
+                        setInterval(App.fetchStreamers, CONFIG.REFRESH_INTERVAL * 2);
+                    }
+                }, CONFIG.REFRESH_INTERVAL);
             }
         };
 
