@@ -473,6 +473,26 @@
     0% { background-position: 0% 50%; }
     100% { background-position: 100% 50%; }
 }
+
+/* Sponsor kartındaki profil resmi ve çevrimdışı resmi için animasyonlu degrade çerçeve */
+.streamer-card.sponsored .streamer-avatar,
+.streamer-card.sponsored .profile-image {
+    position: relative;
+    z-index: 1;
+    border: 3px solid transparent;
+    background: linear-gradient(120deg, #53fc18, #00e0ff, #53fc18, #ffe066, #53fc18);
+    background-size: 300% 300%;
+    animation: sponsor-avatar-gradient-move 2.5s linear infinite;
+    /* Görselin degrade görünmesi için aşağıdaki satırlar gerekli */
+    -webkit-background-clip: border-box;
+    border-radius: 50%;
+    box-shadow: 0 0 0 4px transparent, 0 0 16px 2px rgba(83,252,24,0.18);
+}
+
+@keyframes sponsor-avatar-gradient-move {
+    0% { background-position: 0% 50%; }
+    100% { background-position: 100% 50%; }
+}
     </style>
 </head>
 <body>
