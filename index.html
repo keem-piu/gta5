@@ -368,16 +368,44 @@
         }
         
         .loading-spinner {
-            width: 40px;
-            height: 40px;
-            border: 4px solid rgba(83, 252, 24, 0.2);
-            border-top-color: var(--primary);
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
+            width: 60px;
+            height: 60px;
+            position: relative;
         }
         
-        @keyframes spin {
-            to { transform: rotate(360deg); }
+        .solar-clock {
+            width: 100%;
+            height: 100%;
+            animation: rotate 2s linear infinite;
+            transform-origin: center;
+        }
+        
+        .solar-clock-circle {
+            fill: none;
+            stroke: var(--primary);
+            stroke-width: 4;
+            stroke-dasharray: 150;
+            stroke-dashoffset: 150;
+            animation: dash 1.5s ease-in-out infinite;
+        }
+        
+        @keyframes rotate {
+            100% { transform: rotate(360deg); }
+        }
+        
+        @keyframes dash {
+            0% {
+                stroke-dashoffset: 150;
+                stroke: var(--primary);
+            }
+            50% {
+                stroke-dashoffset: 50;
+                stroke: var(--primary-dark);
+            }
+            100% {
+                stroke-dashoffset: 150;
+                stroke: var(--primary);
+            }
         }
         
         .error-message {
@@ -415,8 +443,12 @@
 
     <div class="container">
         <div id="loading" class="loading">
-            <div class="loading-spinner"></div>
-            <div>Yayınlar yükleniyor...</div>
+            <div class="loading-spinner">
+                <svg class="solar-clock" viewBox="0 0 50 50">
+                    <circle class="solar-clock-circle" cx="25" cy="25" r="20"></circle>
+                </svg>
+            </div>
+            <div>Yayınlar hızla yükleniyor...</div>
         </div>
         <div id="error-message" class="error-message" style="display: none;"></div>
 
@@ -440,8 +472,8 @@
         // Sabitler ve Yapılandırma
         const CONFIG = {
             API_BASE_URL: "https://kick.com/api/v2/channels/",
-            REFRESH_INTERVAL: 5 * 60 * 1000, // 5 dakika
-            BATCH_SIZE: 10, // Aynı anda yapılacak maksimum istek sayısı (artırıldı)
+            REFRESH_INTERVAL: 5 * 60 * 1000,
+            BATCH_SIZE: 15,
             STATIC_STREAMERS: [
                 "burakg", "asepos", "limonvari", "x4te", "egemenfx", "chavohaze", "diorr35", 
                 "justwicky", "canarkhu", "thekolpa", "aka", "gogo", "fjorgyn", "diana0035",
@@ -459,7 +491,7 @@
                 "beratarsllan", "orhunpaso", "mordredsly", "hudsoonn", "cagatayk", "phriksos"
             ],
             SPONSORED_STREAMER: "phriksos",
-            CACHE_TTL: 24 * 60 * 60 * 1000 // 24 saat
+            CACHE_TTL: 24 * 60 * 60 * 1000
         };
 
         // Uygulama Durumu
@@ -467,7 +499,8 @@
             streamerStats: {},
             updateIntervals: {},
             profileImageCache: {},
-            observer: null
+            observer: null,
+            isFirstLoad: true
         };
 
         // Yardımcı Fonksiyonlar
@@ -515,18 +548,43 @@
                 return img;
             },
             
-            createSvgIcon: (paths, width = 16, height = 16, viewBox = "0 0 24 24") => {
+            createClockIcon: () => {
                 const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-                svg.setAttribute("width", width);
-                svg.setAttribute("height", height);
-                svg.setAttribute("viewBox", viewBox);
-                svg.setAttribute("fill", "currentColor");
-                paths.forEach(p => {
-                    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-                    path.setAttribute("d", p.d);
-                    if (p.fillRule) path.setAttribute("fill-rule", p.fillRule);
-                    svg.appendChild(path);
-                });
+                svg.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+                svg.setAttribute("width", "14");
+                svg.setAttribute("height", "14");
+                svg.setAttribute("viewBox", "0 0 24 24");
+                
+                const defs = document.createElementNS("http://www.w3.org/2000/svg", "defs");
+                const mask = document.createElementNS("http://www.w3.org/2000/svg", "mask");
+                mask.setAttribute("id", "clockMask");
+                
+                const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
+                g.setAttribute("fill", "none");
+                
+                const circlePath = document.createElementNS("http://www.w3.org/2000/svg", "path");
+                circlePath.setAttribute("fill", "#fff");
+                circlePath.setAttribute("d", "M22 12c0 5.523-4.477 10-10 10S2 17.523 2 12S6.477 2 12 2s10 4.477 10 10");
+                
+                const clockPath = document.createElementNS("http://www.w3.org/2000/svg", "path");
+                clockPath.setAttribute("fill", "#000");
+                clockPath.setAttribute("fill-rule", "evenodd");
+                clockPath.setAttribute("d", "M12 7.25a.75.75 0 0 1 .75.75v3.69l2.28 2.28a.75.75 0 1 1-1.06 1.06l-2.5-2.5a.75.75 0 0 1-.22-.53V8a.75.75 0 0 1 .75-.75");
+                clockPath.setAttribute("clip-rule", "evenodd");
+                
+                g.appendChild(circlePath);
+                g.appendChild(clockPath);
+                mask.appendChild(g);
+                defs.appendChild(mask);
+                
+                const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+                path.setAttribute("fill", "currentColor");
+                path.setAttribute("d", "M0 0h24v24H0z");
+                path.setAttribute("mask", "url(#clockMask)");
+                
+                svg.appendChild(defs);
+                svg.appendChild(path);
+                
                 return svg;
             },
             
@@ -562,7 +620,6 @@
         // API İşlemleri
         const API = {
             getProfilePictureUrl: async (username) => {
-                // Önce önbelleği kontrol et
                 const cachedUrls = Utils.getCachedData(`profile-${username}`);
                 if (cachedUrls) {
                     return cachedUrls;
@@ -576,7 +633,6 @@
                     const profileUrl = (data.user.profile_pic || `https://images.kick.com/channels/${username}/profile_small`).split('?')[0];
                     const urls = [profileUrl];
                     
-                    // Önbelleğe al
                     Utils.setCachedData(`profile-${username}`, urls);
                     return urls;
                 } catch (error) {
@@ -641,20 +697,28 @@
                 const results = [];
                 
                 try {
-                    // Önbellekten canlı olan yayıncıları kontrol et
-                    const cachedLiveStreamers = Utils.getCachedData('live-streamers') || [];
+                    if (APP_STATE.isFirstLoad) {
+                        const cachedLiveStreamers = Utils.getCachedData('live-streamers') || [];
+                        const batch = cachedLiveStreamers.length > 0 ? 
+                            cachedLiveStreamers : 
+                            CONFIG.STATIC_STREAMERS.slice(0, CONFIG.BATCH_SIZE);
+                        
+                        const batchRequests = batch.map(username => 
+                            API.fetchStreamerData(username).catch(e => {
+                                console.error(`${username} veri alınamadı:`, e);
+                                return API.getFallbackData(username);
+                            })
+                        );
+                        
+                        const batchResults = await Promise.all(batchRequests);
+                        results.push(...batchResults);
+                        
+                        APP_STATE.isFirstLoad = false;
+                        return results;
+                    }
                     
-                    // İstekleri gruplar halinde yap
                     for (let i = 0; i < CONFIG.STATIC_STREAMERS.length; i += CONFIG.BATCH_SIZE) {
                         const batch = CONFIG.STATIC_STREAMERS.slice(i, i + CONFIG.BATCH_SIZE);
-                        
-                        // Önbellekte canlı olanları önceliklendir
-                        batch.sort((a, b) => {
-                            const aIsCachedLive = cachedLiveStreamers.includes(a);
-                            const bIsCachedLive = cachedLiveStreamers.includes(b);
-                            return bIsCachedLive - aIsCachedLive;
-                        });
-                        
                         const batchRequests = batch.map(username => 
                             API.fetchStreamerData(username).catch(e => {
                                 console.error(`${username} veri alınamadı:`, e);
@@ -666,7 +730,6 @@
                         results.push(...batchResults);
                     }
 
-                    // Canlı olan yayıncıları önbelleğe al
                     const liveStreamers = results.filter(s => s.isLive).map(s => s.username);
                     Utils.setCachedData('live-streamers', liveStreamers);
                     
@@ -694,42 +757,33 @@
                 const streamerList = document.getElementById('streamer-list');
                 streamerList.innerHTML = '';
 
-                // Önceki interval'leri temizle
                 Object.values(APP_STATE.updateIntervals).forEach(clearInterval);
                 APP_STATE.updateIntervals = {};
 
-                // Sponsor yayıncıyı bul
                 const sponsoredStreamer = streamersData.find(s => s.username === CONFIG.SPONSORED_STREAMER);
                 const otherStreamers = streamersData.filter(s => s.username !== CONFIG.SPONSORED_STREAMER);
 
-                // Canlı yayınları sırala (sponsor hariç)
                 const liveStreamers = otherStreamers.filter(s => s.isLive).sort((a, b) => b.viewers - a.viewers);
                 const offlineStreamers = otherStreamers.filter(s => !s.isLive).sort((a, b) => {
-                    // Çevrimdışı yayıncıları son yayın tarihine göre sırala
                     return new Date(b.lastStream) - new Date(a.lastStream);
                 });
 
-                // Sponsor canlıysa en üste ekle
                 if (sponsoredStreamer && sponsoredStreamer.isLive) {
                     UI.renderStreamerCard(sponsoredStreamer, true);
                 }
 
-                // Diğer canlı yayınları ekle
                 liveStreamers.forEach(streamer => {
                     UI.renderStreamerCard(streamer, false);
                 });
 
-                // Sponsor çevrimdışıysa çevrimdışı yayıncılardan önce ekle
                 if (sponsoredStreamer && !sponsoredStreamer.isLive) {
                     UI.renderStreamerCard(sponsoredStreamer, true);
                 }
 
-                // Çevrimdışı yayıncıları ekle
                 offlineStreamers.forEach(streamer => {
                     UI.renderStreamerCard(streamer, false);
                 });
 
-                // Intersection Observer'ı başlat
                 UI.initIntersectionObserver();
             },
 
@@ -746,12 +800,10 @@
                     streamerCard.dataset.startTime = startTime;
                 }
 
-                // Media content
                 const mediaDiv = document.createElement('div');
                 mediaDiv.className = 'streamer-media';
                 
                 if (isLive) {
-                    // Iframe yerine önce bir placeholder ekleyelim
                     const placeholder = document.createElement('div');
                     placeholder.className = 'iframe-placeholder';
                     placeholder.style.width = '100%';
@@ -796,19 +848,23 @@
                     const sponsoredBadge = document.createElement('div');
                     sponsoredBadge.className = 'sponsored-badge';
                     
-                    const starIcon = Utils.createSvgIcon([
-                        {d: "M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2L9.19 8.63L2 9.24l5.46 4.73L5.82 21z"}
-                    ]);
+                    const starIcon = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+                    starIcon.setAttribute("width", "14");
+                    starIcon.setAttribute("height", "14");
+                    starIcon.setAttribute("viewBox", "0 0 24 24");
                     
+                    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+                    path.setAttribute("d", "M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2L9.19 8.63L2 9.24l5.46 4.73L5.82 21z");
+                    path.setAttribute("fill", "currentColor");
+                    
+                    starIcon.appendChild(path);
                     sponsoredBadge.append(starIcon, document.createTextNode('SPONSOR'));
                     mediaDiv.appendChild(sponsoredBadge);
                 }
 
-                // Info content
                 const infoDiv = document.createElement('div');
                 infoDiv.className = 'streamer-info';
                 
-                // Header section
                 const headerDiv = document.createElement('div');
                 headerDiv.className = 'streamer-header';
                 
@@ -834,7 +890,6 @@
                 headerDiv.append(avatarImg, nameContainer);
                 infoDiv.appendChild(headerDiv);
                 
-                // Meta section
                 const metaDiv = document.createElement('div');
                 metaDiv.className = 'streamer-meta';
                 
@@ -847,9 +902,16 @@
                     const viewerCount = document.createElement('div');
                     viewerCount.className = 'viewer-count';
                     
-                    const eyeIcon = Utils.createSvgIcon([
-                        {d: "M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5s5 2.24 5 5s-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3s3-1.34 3-3s-1.34-3-3-3z"}
-                    ]);
+                    const eyeIcon = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+                    eyeIcon.setAttribute("width", "14");
+                    eyeIcon.setAttribute("height", "14");
+                    eyeIcon.setAttribute("viewBox", "0 0 24 24");
+                    
+                    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+                    path.setAttribute("d", "M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5s5 2.24 5 5s-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3s3-1.34 3-3s-1.34-3-3-3z");
+                    path.setAttribute("fill", "currentColor");
+                    
+                    eyeIcon.appendChild(path);
                     eyeIcon.classList.add('viewer-icon');
                     viewerCount.append(eyeIcon, document.createTextNode(Utils.formatNumber(data.viewers)));
                     metaDiv.appendChild(viewerCount);
@@ -858,9 +920,7 @@
                         const durationDiv = document.createElement('div');
                         durationDiv.className = 'live-duration';
                         
-                        const clockIcon = Utils.createSvgIcon([
-                            {d: "M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10s10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8s8 3.59 8 8s-3.59 8-8 8zm.31-8.86c-1.77-.45-2.34-.94-2.34-1.67c0-.84.79-1.43 2.1-1.43c1.38 0 1.9.66 1.94 1.64h1.71c-.05-1.34-.87-2.57-2.49-2.97V5H10.9v1.69c-1.51.32-2.72 1.3-2.72 2.81c0 1.79 1.49 2.69 3.66 3.21c1.95.46 2.34 1.15 2.34 1.87c0 .53-.39 1.39-2.1 1.39c-1.6 0-2.23-.72-2.32-1.64H8.04c.1 1.7 1.36 2.66 2.86 2.97V19h2.34v-1.67c1.52-.29 2.72-1.16 2.73-2.77c-.01-2.2-1.9-2.96-3.66-3.42z"}
-                        ]);
+                        const clockIcon = Utils.createClockIcon();
                         clockIcon.classList.add('clock-icon');
                         durationDiv.append(clockIcon, document.createElement('span'));
                         metaDiv.appendChild(durationDiv);
@@ -870,7 +930,6 @@
                 
                 infoDiv.appendChild(metaDiv);
                 
-                // Watch button
                 const watchButton = document.createElement('a');
                 watchButton.href = `https://kick.com/${data.username}`;
                 watchButton.className = 'watch-button';
@@ -878,7 +937,6 @@
                 watchButton.target = '_blank';
                 infoDiv.appendChild(watchButton);
                 
-                // Assemble the card
                 streamerCard.append(mediaDiv, infoDiv);
                 document.getElementById('streamer-list').appendChild(streamerCard);
 
@@ -905,7 +963,6 @@
                             const placeholder = entry.target;
                             const username = placeholder.dataset.username;
                             
-                            // Iframe'i oluştur ve placeholder'ı değiştir
                             const iframe = document.createElement('iframe');
                             iframe.src = `https://player.kick.com/${username}?autoplay=true&muted=true`;
                             iframe.className = 'streamer-iframe';
@@ -918,11 +975,10 @@
                         }
                     });
                 }, {
-                    rootMargin: '200px', // Görüntü alanına girmeden önce yükle
+                    rootMargin: '200px',
                     threshold: 0.1
                 });
 
-                // Tüm iframe placeholder'larını gözle
                 document.querySelectorAll('.iframe-placeholder').forEach(el => {
                     APP_STATE.observer.observe(el);
                 });
@@ -943,62 +999,56 @@
 
         // Ana Uygulama Fonksiyonları
         const App = {
-            fetchStreamers: async () => {
+            fetchStreamers: async (isInitialLoad = false) => {
                 const loadingElement = document.getElementById('loading');
                 const errorElement = document.getElementById('error-message');
                 const streamerList = document.getElementById('streamer-list');
                 
-                loadingElement.style.display = 'flex';
-                errorElement.style.display = 'none';
-                streamerList.innerHTML = '';
-                errorElement.textContent = '';
-
+                if (isInitialLoad) {
+                    loadingElement.style.display = 'flex';
+                    errorElement.style.display = 'none';
+                    streamerList.innerHTML = '';
+                }
+                
                 try {
                     console.log("Yayıncı verileri alınıyor...");
                     const streamersData = await API.fetchStreamerStats();
                     console.log("Alınan yayıncı verileri:", streamersData);
                     
-                    if (streamersData.length === 0) {
+                    if (streamersData.length === 0 && !isInitialLoad) {
                         throw new Error('Hiç yayıncı verisi alınamadı');
                     }
                     
                     UI.renderStreamers(streamersData);
                     UI.updateTime();
+                    
+                    if (isInitialLoad && streamersData.length < CONFIG.STATIC_STREAMERS.length) {
+                        setTimeout(() => App.fetchStreamers(false), 500);
+                    }
                 } catch (error) {
                     console.error('Hata:', error);
-                    UI.showError(`Yayınlar yüklenirken bir hata oluştu: ${error.message}`);
+                    if (!isInitialLoad) {
+                        UI.showError(`Yayınlar yüklenirken bir hata oluştu: ${error.message}`);
+                    }
                 } finally {
-                    loadingElement.style.display = 'none';
+                    if (!isInitialLoad) {
+                        loadingElement.style.display = 'none';
+                    }
                     console.log("Yükleme tamamlandı");
                 }
             },
 
             init: () => {
-                // İlk yükleme
-                App.fetchStreamers();
+                App.fetchStreamers(true);
                 
-                // Periyodik güncelleme
                 setInterval(() => {
-                    // Sadece canlı yayınları kontrol et
-                    const liveUsernames = Object.values(APP_STATE.streamerStats)
-                        .filter(s => s.isLive)
-                        .map(s => s.username);
-                    
-                    if (liveUsernames.length > 0) {
-                        App.fetchStreamers();
-                    } else {
-                        // Canlı yayın yoksa daha uzun aralıklarla kontrol et
-                        setInterval(App.fetchStreamers, CONFIG.REFRESH_INTERVAL * 2);
-                    }
+                    App.fetchStreamers(false);
                 }, CONFIG.REFRESH_INTERVAL);
             }
         };
 
-        // Sayfa yüklendiğinde uygulamayı başlat
         document.addEventListener('DOMContentLoaded', App.init);
-
-        // Global fonksiyon
-        window.fetchStreamers = App.fetchStreamers;
+        window.fetchStreamers = () => App.fetchStreamers(false);
     </script>
 </body>
 </html>
