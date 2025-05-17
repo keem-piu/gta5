@@ -3,7 +3,7 @@
 // Sabitler
 const STATIC_STREAMERS = [
     "burakg", "asepos", "limonvari", "x4te", "egemenfx", "chavohaze", "diorr35", "justwicky", "canarkhu", 
-    "thekolpa", "aka", "gogo", "fjorgyn", "diana0035", "cjayhq", "dex0f", "liyantl", 
+    "thekolpa", "aka", "keempiu", "gogo", "fjorgyn", "diana0035", "cjayhq", "dex0f", "liyantl", 
     "chicossberg", "rayz", "katasayf", "repkk", "pennia", "flavorr", "adamimlew", "rod4n", 
     "tacocan", "atillaberk", "eduskaa", "qafsiiel", "fiorevelenoso", "timuty", 
     "quello00", "cero31", "zibrall", "ogibkg", "wasg0d", "gitartist", "liftof", "ertinayy", 
@@ -19,7 +19,7 @@ const STATIC_STREAMERS = [
 
 // Global Değişkenler
 let STREAMER_STATS = {};
-const SPONSORED_STREAMER = "phriksos";
+const SPONSORED_STREAMER = "keempiu";
 const updateIntervals = {};
 const PROFILE_IMAGE_CACHE = {};
 const REFRESH_INTERVAL = 5 * 60 * 1000; // 5 dakika
