@@ -22,7 +22,9 @@ let STREAMER_STATS = {};
 const SPONSORED_STREAMER = "phriksos";
 const updateIntervals = {};
 const PROFILE_IMAGE_CACHE = {};
-const REFRESH_INTERVAL = 5 * 60 * 1000; // 5 dakika (milisaniye cinsinden)
+const REFRESH_INTERVAL = 5 * 60 * 1000; // 5 dakika
+const API_BASE_URL = "https://kick.com/api/v2/channels/";
+const BATCH_SIZE = 5; // Aynı anda yapılacak maksimum istek sayısı
 
 // Yardımcı Fonksiyonlar
 function formatNumber(num) {
@@ -38,9 +40,7 @@ function formatDate(dateString) {
 
     if (diffHours < 1) return "1 saatten az";
     if (diffHours < 24) return `${diffHours} saat önce`;
-
-    const diffDays = Math.floor(diffHours / 24);
-    return `${diffDays} gün önce`;
+    return `${Math.floor(diffHours / 24)} gün önce`;
 }
 
 function parseKickDate(dateString) {
@@ -49,20 +49,14 @@ function parseKickDate(dateString) {
 
 function formatDuration(startDate) {
     if (!startDate) return "00:00:00";
-    
     try {
         const start = parseKickDate(startDate);
         const now = new Date();
-        
         const diffMs = Math.max(0, now - start);
         const totalSeconds = Math.floor(diffMs / 1000);
         
-        const hours = Math.floor(totalSeconds / 3600);
-        const minutes = Math.floor((totalSeconds % 3600) / 60);
-        const seconds = totalSeconds % 60;
-
         const pad = (num) => num.toString().padStart(2, '0');
-        return `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
+        return `${pad(Math.floor(totalSeconds / 3600))}:${pad(Math.floor((totalSeconds % 3600) / 60))}:${pad(totalSeconds % 60)}`;
     } catch (e) {
         console.error("Süre hesaplama hatası:", e);
         return "00:00:00";
@@ -75,14 +69,11 @@ async function getProfilePictureUrl(username) {
     }
 
     try {
-        const response = await fetch(`https://kick.com/api/v2/channels/${username}`);
+        const response = await fetch(`${API_BASE_URL}${username}`);
         if (!response.ok) throw new Error('Kullanıcı bulunamadı');
         
         const data = await response.json();
-        let profileUrl = data.user.profile_pic || 
-                        `https://images.kick.com/channels/${username}/profile_small`;
-        
-        profileUrl = profileUrl.split('?')[0];
+        const profileUrl = (data.user.profile_pic || `https://images.kick.com/channels/${username}/profile_small`).split('?')[0];
         PROFILE_IMAGE_CACHE[username] = [profileUrl];
         return [profileUrl];
     } catch (error) {
@@ -102,19 +93,16 @@ function createImageElement(urls, alt, className, placeholderUrl) {
     img.loading = 'lazy';
     
     let currentIndex = 0;
-    
-    function tryNextUrl() {
+    const tryNextUrl = () => {
         if (currentIndex < urls.length) {
-            img.src = urls[currentIndex] + '?t=' + Date.now();
-            currentIndex++;
+            img.src = urls[currentIndex++] + '?t=' + Date.now();
         } else {
             img.src = placeholderUrl;
         }
-    }
+    };
     
     img.onerror = tryNextUrl;
     tryNextUrl();
-    
     return img;
 }
 
@@ -123,78 +111,76 @@ async function fetchStreamerData(username) {
     try {
         const [profilePicUrls, apiData] = await Promise.all([
             getProfilePictureUrl(username),
-            fetch(`https://kick.com/api/v2/channels/${username}`).then(res => res.json())
+            fetch(`${API_BASE_URL}${username}`).then(res => res.json())
         ]);
 
         const initials = username.slice(0, 2).toUpperCase();
+        const livestream = apiData.livestream || {};
         
         return {
-            username: username,
-            isLive: apiData.livestream?.is_live || false,
-            viewers: apiData.livestream?.viewer_count || 0,
+            username,
+            isLive: livestream.is_live || false,
+            viewers: livestream.viewer_count || 0,
             followers: formatNumber(apiData.followers_count || 0),
             lastStream: apiData.last_live_at ? formatDate(apiData.last_live_at) : "Hiç yayın yapmadı",
-            title: apiData.livestream?.session_title || `${username} Kanalı`,
-            thumbnail: apiData.livestream?.thumbnail?.url || null,
-            startTime: apiData.livestream?.created_at || null,
-            category: apiData.livestream?.categories?.[0]?.name || "GTA",
-            profilePicUrls: profilePicUrls,
-            initials: initials
+            title: livestream.session_title || `${username} Kanalı`,
+            thumbnail: livestream.thumbnail?.url || null,
+            startTime: livestream.created_at || null,
+            category: livestream.categories?.[0]?.name || "GTA",
+            profilePicUrls,
+            initials
         };
     } catch (error) {
         console.error(`${username} veri alım hatası:`, error);
-        const initials = username.slice(0, 2).toUpperCase();
-        return {
-            username: username,
-            isLive: false,
-            viewers: 0,
-            followers: "0",
-            lastStream: "Bilinmiyor",
-            title: `${username} Kanalı`,
-            thumbnail: null,
-            startTime: null,
-            category: "GTA",
-            profilePicUrls: [
-                `https://ui-avatars.com/api/?name=${initials}&background=1a1a24&color=53fc18`,
-                `https://via.placeholder.com/150/1a1a24/53fc18?text=${initials}`
-            ],
-            initials: initials
-        };
+        return getFallbackData(username);
     }
+}
+
+function getFallbackData(username) {
+    const initials = username.slice(0, 2).toUpperCase();
+    return {
+        username,
+        isLive: false,
+        viewers: 0,
+        followers: "0",
+        lastStream: "Bilinmiyor",
+        title: `${username} Kanalı`,
+        thumbnail: null,
+        startTime: null,
+        category: "GTA",
+        profilePicUrls: [
+            `https://ui-avatars.com/api/?name=${initials}&background=1a1a24&color=53fc18`,
+            `https://via.placeholder.com/150/1a1a24/53fc18?text=${initials}`
+        ],
+        initials
+    };
 }
 
 async function fetchStreamerStats() {
     const stats = {};
+    const results = [];
+    
     try {
-        const requests = STATIC_STREAMERS.map(username => 
-            fetchStreamerData(username).catch(e => {
-                console.error(`${username} veri alınamadı:`, e);
-                const initials = username.slice(0, 2).toUpperCase();
-                return {
-                    username: username,
-                    isLive: false,
-                    viewers: 0,
-                    followers: "0",
-                    lastStream: "Bilinmiyor",
-                    title: `${username} Kanalı`,
-                    thumbnail: null,
-                    startTime: null,
-                    category: "GTA",
-                    profilePicUrls: [
-                        `https://ui-avatars.com/api/?name=${initials}&background=1a1a24&color=53fc18`,
-                        `https://via.placeholder.com/150/1a1a24/53fc18?text=${initials}`
-                    ],
-                    initials: initials
-                };
-            })
-        );
-        
-        const results = await Promise.all(requests);
-        
-        results.forEach(data => {
-            stats[data.username] = data;
-        });
+        // İstekleri gruplar halinde yap
+        for (let i = 0; i < STATIC_STREAMERS.length; i += BATCH_SIZE) {
+            const batch = STATIC_STREAMERS.slice(i, i + BATCH_SIZE);
+            const batchRequests = batch.map(username => 
+                fetchStreamerData(username).catch(e => {
+                    console.error(`${username} veri alınamadı:`, e);
+                    return getFallbackData(username);
+                })
+            );
+            
+            const batchResults = await Promise.all(batchRequests);
+            results.push(...batchResults);
+            
+            // Bir sonraki batch öncesi bekle
+            if (i + BATCH_SIZE < STATIC_STREAMERS.length) {
+                await new Promise(resolve => setTimeout(resolve, 1000));
+            }
+        }
 
+        results.forEach(data => stats[data.username] = data);
         STREAMER_STATS = stats;
         return results;
     } catch (error) {
@@ -208,47 +194,42 @@ function updateDurationForCard(card, startTime) {
     if (!card || !startTime) return;
     const durationElement = card.querySelector('.live-duration span');
     if (durationElement) {
-        const duration = formatDuration(startTime);
-        durationElement.textContent = duration;
+        durationElement.textContent = formatDuration(startTime);
     }
 }
 
 function createEyeIcon() {
-    const svgNS = "http://www.w3.org/2000/svg";
-    const svg = document.createElementNS(svgNS, "svg");
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
     svg.setAttribute("width", "16");
     svg.setAttribute("height", "16");
     svg.setAttribute("viewBox", "0 0 24 24");
     svg.setAttribute("fill", "currentColor");
     
-    const path1 = document.createElementNS(svgNS, "path");
+    const path1 = document.createElementNS("http://www.w3.org/2000/svg", "path");
     path1.setAttribute("d", "M9.75 12a2.25 2.25 0 1 1 4.5 0a2.25 2.25 0 0 1-4.5 0");
     
-    const path2 = document.createElementNS(svgNS, "path");
+    const path2 = document.createElementNS("http://www.w3.org/2000/svg", "path");
     path2.setAttribute("d", "M2 12c0 1.64.425 2.191 1.275 3.296C4.972 17.5 7.818 20 12 20s7.028-2.5 8.725-4.704C21.575 14.192 22 13.639 22 12c0-1.64-.425-2.191-1.275-3.296C19.028 6.5 16.182 4 12 4S4.972 6.5 3.275 8.704C2.425 9.81 2 10.361 2 12m10-3.75a3.75 3.75 0 1 0 0 7.5a3.75 3.75 0 0 0 0-7.5");
     path2.setAttribute("fill-rule", "evenodd");
     
-    svg.appendChild(path1);
-    svg.appendChild(path2);
+    svg.append(path1, path2);
     return svg;
 }
 
 function createClockIcon() {
-    const svgNS = "http://www.w3.org/2000/svg";
-    const svg = document.createElementNS(svgNS, "svg");
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
     svg.setAttribute("width", "16");
     svg.setAttribute("height", "16");
     svg.setAttribute("viewBox", "0 0 24 24");
     svg.setAttribute("fill", "currentColor");
     
-    const path1 = document.createElementNS(svgNS, "path");
+    const path1 = document.createElementNS("http://www.w3.org/2000/svg", "path");
     path1.setAttribute("d", "M12 2C6.486 2 2 6.486 2 12s4.486 10 10 10 10-4.486 10-10S17.514 2 12 2zm0 18c-4.411 0-8-3.589-8-8s3.589-8 8-8 8 3.589 8 8-3.589 8-8 8z");
     
-    const path2 = document.createElementNS(svgNS, "path");
+    const path2 = document.createElementNS("http://www.w3.org/2000/svg", "path");
     path2.setAttribute("d", "M13 7h-2v6h6v-2h-4z");
     
-    svg.appendChild(path1);
-    svg.appendChild(path2);
+    svg.append(path1, path2);
     return svg;
 }
 
@@ -256,11 +237,11 @@ function renderStreamers(streamersData) {
     const streamerList = document.getElementById('streamer-list');
     streamerList.innerHTML = '';
 
-    Object.values(updateIntervals).forEach(interval => clearInterval(interval));
+    // Önceki interval'leri temizle
+    Object.values(updateIntervals).forEach(clearInterval);
     Object.keys(updateIntervals).forEach(key => delete updateIntervals[key]);
 
     streamersData.forEach(data => {
-        const isSponsored = data.username === SPONSORED_STREAMER;
         const isLive = data.isLive;
         const startTime = data.startTime;
         const placeholderUrl = `https://via.placeholder.com/150/1a1a24/00ff00?text=${data.initials}`;
@@ -305,17 +286,15 @@ function renderStreamers(streamersData) {
                 placeholderUrl
             );
             
-            offlineDiv.appendChild(profileImg);
-            
             const offlineStatus = document.createElement('div');
             offlineStatus.className = 'offline-status';
             offlineStatus.textContent = 'ÇEVRİMDIŞI';
-            offlineDiv.appendChild(offlineStatus);
             
+            offlineDiv.append(profileImg, offlineStatus);
             mediaDiv.appendChild(offlineDiv);
         }
 
-        if (isSponsored) {
+        if (data.username === SPONSORED_STREAMER) {
             const sponsoredBadge = document.createElement('div');
             sponsoredBadge.className = 'sponsored-badge';
             sponsoredBadge.textContent = 'SPONSOR';
@@ -348,12 +327,8 @@ function renderStreamers(streamersData) {
         titleDiv.className = 'streamer-title';
         titleDiv.textContent = data.title;
         
-        nameContainer.appendChild(nameDiv);
-        nameContainer.appendChild(titleDiv);
-        
-        headerDiv.appendChild(avatarImg);
-        headerDiv.appendChild(nameContainer);
-        
+        nameContainer.append(nameDiv, titleDiv);
+        headerDiv.append(avatarImg, nameContainer);
         infoDiv.appendChild(headerDiv);
         
         // Meta section
@@ -371,9 +346,7 @@ function renderStreamers(streamersData) {
             
             const eyeIcon = createEyeIcon();
             eyeIcon.classList.add('viewer-icon');
-            viewerCount.appendChild(eyeIcon);
-            
-            viewerCount.appendChild(document.createTextNode(formatNumber(data.viewers)));
+            viewerCount.append(eyeIcon, document.createTextNode(formatNumber(data.viewers)));
             metaDiv.appendChild(viewerCount);
             
             if (startTime) {
@@ -382,13 +355,9 @@ function renderStreamers(streamersData) {
                 
                 const clockIcon = createClockIcon();
                 clockIcon.classList.add('clock-icon');
-                durationDiv.appendChild(clockIcon);
-                
-                const durationText = document.createElement('span');
-                durationText.textContent = formatDuration(startTime);
-                durationDiv.appendChild(durationText);
-                
+                durationDiv.append(clockIcon, document.createElement('span'));
                 metaDiv.appendChild(durationDiv);
+                updateDurationForCard(streamerCard, startTime);
             }
         }
         
@@ -403,14 +372,10 @@ function renderStreamers(streamersData) {
         infoDiv.appendChild(watchButton);
         
         // Assemble the card
-        streamerCard.appendChild(mediaDiv);
-        streamerCard.appendChild(infoDiv);
-        
+        streamerCard.append(mediaDiv, infoDiv);
         streamerList.appendChild(streamerCard);
 
         if (isLive && startTime) {
-            updateDurationForCard(streamerCard, startTime);
-            
             updateIntervals[data.username] = setInterval(() => {
                 if (streamerCard.isConnected) {
                     updateDurationForCard(streamerCard, startTime);
@@ -435,7 +400,10 @@ async function fetchStreamers() {
     errorElement.textContent = '';
 
     try {
+        console.log("Yayıncı verileri alınıyor...");
         const streamersData = await fetchStreamerStats();
+        console.log("Alınan yayıncı verileri:", streamersData);
+        
         if (streamersData.length === 0) {
             throw new Error('Hiç yayıncı verisi alınamadı');
         }
@@ -453,6 +421,7 @@ async function fetchStreamers() {
         showError(`Yayınlar yüklenirken bir hata oluştu: ${error.message}`);
     } finally {
         loadingElement.style.display = 'none';
+        console.log("Yükleme tamamlandı");
     }
 }
 
