@@ -1,5 +1,5 @@
 const STATIC_STREAMERS = [
-    "asepos", "limonvari", "x4te", "egemenfx", "chavohaze", "diorr35", "justwicky", "canarkhu", 
+    "keempiu", "asepos", "limonvari", "x4te", "egemenfx", "chavohaze", "diorr35", "justwicky", "canarkhu", 
     "thekolpa", "aka", "gogo", "fjorgyn", "diana0035", "cjayhq", "dex0f", "liyantl", 
     "chicossberg", "rayz", "katasayf", "repkk", "pennia", "flavorr", "adamimlew", "rod4n", 
     "tacocan", "atillaberk", "burakg", "eduskaa", "qafsiiel", "fiorevelenoso", "timuty", 
@@ -15,7 +15,7 @@ const STATIC_STREAMERS = [
 ];
 
 let STREAMER_STATS = {};
-const SPONSORED_STREAMER = "phriksos";
+const SPONSORED_STREAMER = "keempiu";
 const updateIntervals = {};
 
 function formatNumber(num) {
