@@ -456,6 +456,23 @@
                 grid-template-columns: 1fr;
             }
         }
+
+        /* Sponsor kullanıcı adı için animasyonlu degrade renk efekti */
+.streamer-card.sponsored .streamer-name {
+    background: linear-gradient(90deg, #53fc18, #00e0ff, #53fc18, #ffe066, #53fc18);
+    background-size: 300% 100%;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    animation: sponsor-gradient-move 2.5s linear infinite;
+    font-weight: 800;
+    letter-spacing: 1.5px;
+}
+
+@keyframes sponsor-gradient-move {
+    0% { background-position: 0% 50%; }
+    100% { background-position: 100% 50%; }
+}
     </style>
 </head>
 <body>
