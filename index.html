@@ -174,16 +174,51 @@
             display: flex;
             align-items: center;
             gap: 18px;
+            /* align-items: center; Zaten var, tekrar eklemeye gerek yok */
         }
-        .streamer-avatar {
+        .avatar-wrapper,
+        .streamer-header > div[style*="inline-block"] {
+            position: relative;
+            display: flex !important;
+            align-items: center;
+            justify-content: center;
             width: 62px;
             height: 62px;
+            min-width: 62px;
+            min-height: 62px;
+            /* Daire oranı için */
+            border-radius: 50%;
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        .streamer-avatar {
+            width: 56px;
+            height: 56px;
             border-radius: 50%;
             object-fit: cover;
-            border: 2.5px solid var(--primary);
-            background: #23232b;
-            flex-shrink: 0;
+            display: block;
+            margin: 0 auto;
+            position: relative;
+            z-index: 1;
         }
+
+        .favorite-btn {
+            position: absolute !important;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            display: flex !important;
+            align-items: center;
+            justify-content: center;
+            pointer-events: auto;
+            background: none;
+            z-index: 2;
+            border-radius: 50%;
+            box-sizing: border-box;
+            /* Parlaklık ve efektler zaten mevcut */
+        }
+
         .streamer-name-container {
             flex-grow: 1;
             min-width: 0;
@@ -485,6 +520,7 @@
     animation: sponsor-avatar-gradient-move 2.5s linear infinite;
     /* Görselin degrade görünmesi için aşağıdaki satırlar gerekli */
     -webkit-background-clip: border-box;
+    background-clip: border-box;
     border-radius: 50%;
     box-shadow: 0 0 0 4px transparent, 0 0 16px 2px rgba(83,252,24,0.18);
 }
@@ -492,6 +528,52 @@
 @keyframes sponsor-avatar-gradient-move {
     0% { background-position: 0% 50%; }
     100% { background-position: 100% 50%; }
+}
+
+.favorite-btn {
+    box-shadow: 0 0 0 3px #53fc18, 0 2px 8px 0 rgba(83,252,24,0.18);
+    border-radius: 50%;
+    transition: box-shadow 0.2s, transform 0.15s;
+    opacity: 0.93;
+    outline: 2px solid #23232b;
+}
+.favorite-btn:hover {
+    box-shadow: 0 0 0 5px #53fc18, 0 4px 16px 0 rgba(83,252,24,0.25);
+    transform: scale(1.08);
+    opacity: 1;
+    outline: 2.5px solid #53fc18;
+}
+.favorite-btn svg {
+    filter: drop-shadow(0 0 4px #53fc18);
+}
+
+/* .avatar-wrapper ve .favorite-btn için ekleyin veya güncelleyin */
+
+.avatar-wrapper {
+    position: relative;
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    width: 62px;
+    height: 62px;
+    min-width: 62px;
+    min-height: 62px;
+    border-radius: 50%;
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+.favorite-btn {
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.18s;
+}
+
+.avatar-wrapper:hover .favorite-btn,
+.avatar-wrapper:focus-within .favorite-btn {
+    opacity: 1;
+    pointer-events: auto;
 }
     </style>
 </head>
@@ -848,27 +930,64 @@
                     );
                 }
 
-                const sponsoredStreamer = filteredData.find(s => s.username === CONFIG.SPONSORED_STREAMER);
-                const otherStreamers = filteredData.filter(s => s.username !== CONFIG.SPONSORED_STREAMER);
+                // Favori ve sponsor ayır
+                let favorites = [];
+                try {
+                    favorites = JSON.parse(localStorage.getItem('kick-gta-favorites')) || [];
+                } catch {}
+                const favoriteStreamers = [];
+                const nonFavoriteStreamers = [];
+                filteredData.forEach(s => {
+                    if (favorites.includes(s.username)) {
+                        favoriteStreamers.push(s);
+                    } else {
+                        nonFavoriteStreamers.push(s);
+                    }
+                });
+                // Favori olanları favorilerdeki sıraya göre sırala
+                favoriteStreamers.sort((a, b) => favorites.indexOf(a.username) - favorites.indexOf(b.username));
 
-                const liveStreamers = otherStreamers.filter(s => s.isLive).sort((a, b) => b.viewers - a.viewers);
-                const offlineStreamers = otherStreamers.filter(s => !s.isLive).sort((a, b) => {
-                    return new Date(b.lastStream) - new Date(a.lastStream);
+                // Sponsorlu yayıncıyı bul ve ayır
+                const sponsoredStreamer = filteredData.find(s => s.username === CONFIG.SPONSORED_STREAMER);
+                const otherFavoriteStreamers = favoriteStreamers.filter(s => s.username !== CONFIG.SPONSORED_STREAMER);
+                const otherNonFavoriteStreamers = nonFavoriteStreamers.filter(s => s.username !== CONFIG.SPONSORED_STREAMER);
+
+                // Sıralama: favori canlı > diğer canlı > sponsor (canlıysa) > sponsor (offline) > favori offline > diğer offline
+
+                const liveFavs = otherFavoriteStreamers.filter(s => s.isLive)
+                    .sort((a, b) => b.viewers - a.viewers);
+                const liveOthers = otherNonFavoriteStreamers.filter(s => s.isLive)
+                    .sort((a, b) => b.viewers - a.viewers);
+                const offlineFavs = otherFavoriteStreamers.filter(s => !s.isLive);
+                const offlineOthers = otherNonFavoriteStreamers.filter(s => !s.isLive);
+
+                // Favori canlılar
+                liveFavs.forEach(streamer => {
+                    UI.renderStreamerCard(streamer, false);
                 });
 
+                // Diğer canlılar
+                liveOthers.forEach(streamer => {
+                    UI.renderStreamerCard(streamer, false);
+                });
+
+                // Sponsorlu yayıncı canlıysa burada göster (canlıların hemen altında)
                 if (sponsoredStreamer && sponsoredStreamer.isLive) {
                     UI.renderStreamerCard(sponsoredStreamer, true);
                 }
 
-                liveStreamers.forEach(streamer => {
-                    UI.renderStreamerCard(streamer, false);
-                });
-
+                // Sponsorlu yayıncı offline ise burada göster (offline'ların üstünde)
                 if (sponsoredStreamer && !sponsoredStreamer.isLive) {
                     UI.renderStreamerCard(sponsoredStreamer, true);
                 }
 
-                offlineStreamers.forEach(streamer => {
+                // Favori offline
+                offlineFavs.forEach(streamer => {
+                    UI.renderStreamerCard(streamer, false);
+                });
+
+                // Diğer offline
+                offlineOthers.forEach(streamer => {
                     UI.renderStreamerCard(streamer, false);
                 });
 
@@ -955,37 +1074,94 @@
                 
                 const headerDiv = document.createElement('div');
                 headerDiv.className = 'streamer-header';
-                
+
+                // PROFİL RESMİ: Bağlantıyı kaldır, favori ikonu üstüne ekle
+                const avatarWrapper = document.createElement('div');
+                avatarWrapper.style.position = 'relative';
+                avatarWrapper.style.display = 'inline-block';
+
                 const avatarImg = Utils.createImageElement(
                     data.profilePicUrls,
                     data.username,
                     'streamer-avatar',
                     smallPlaceholderUrl
                 );
-                // Avatarı bağlantı haline getir
-                const avatarLink = document.createElement('a');
-                avatarLink.href = `https://kick.com/${data.username}`;
-                avatarLink.target = '_blank';
-                avatarLink.rel = 'noopener noreferrer';
-                avatarLink.appendChild(avatarImg);
 
-                const nameContainer = document.createElement('div');
-                nameContainer.className = 'streamer-name-container';
-                
-                // Kullanıcı adını bağlantı haline getir
-                const nameDiv = document.createElement('a');
-                nameDiv.className = 'streamer-name';
-                nameDiv.textContent = data.username.toUpperCase();
-                nameDiv.href = `https://kick.com/${data.username}`;
-                nameDiv.target = '_blank';
-                nameDiv.rel = 'noopener noreferrer';
+                // Favori ikonu ekle
+                const favBtn = document.createElement('div');
+                favBtn.className = 'favorite-btn';
+                favBtn.title = 'Favorilere ekle';
+                favBtn.innerHTML = `
+<div class="absolute inset-0 rounded-full flex flex-col w-auto h-auto cursor-pointer bg-white/60 dark:bg-black/60 border border-black/20 dark:border-white/15 backdrop-blur-md" style="top:0;left:0;width:100%;height:100%;display:flex;align-items:center;justify-content:center;pointer-events:auto;">
+    <div class="w-full h-full center" style="display:flex;align-items:center;justify-content:center;">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" style="color:white;" xmlns="http://www.w3.org/2000/svg">
+            <path fill="currentColor" fill-rule="evenodd" d="M11.943 1.25c-2.073 0-3.706 0-4.982.173c-1.31.178-2.355.552-3.176 1.382c-.82.829-1.188 1.882-1.364 3.202c-.171 1.289-.171 2.938-.171 5.034v5.098c0 1.508 0 2.701.096 3.6c.095.888.298 1.689.88 2.225c.466.43 1.056.7 1.686.773c.787.09 1.522-.286 2.247-.8c.733-.518 1.622-1.305 2.744-2.297l.036-.032c.52-.46.872-.77 1.166-.986c.284-.207.457-.282.603-.312a1.5 1.5 0 0 1 .584 0c.146.03.32.105.603.312c.294.215.646.526 1.166.986l.037.032c1.121.992 2.01 1.779 2.743 2.298c.725.513 1.46.889 2.247.799a3 3 0 0 0 1.686-.773c.581-.536.785-1.337.88-2.225c.096-.899.096-2.092.096-3.6v-5.098c0-2.096 0-3.746-.171-5.034c-.176-1.32-.544-2.373-1.364-3.202c-.821-.83-1.866-1.204-3.176-1.382c-1.276-.173-2.909-.173-4.982-.173zM4.85 3.86c.497-.502 1.172-.795 2.312-.95c1.163-.158 2.694-.16 4.837-.16s3.674.002 4.837.16c1.14.155 1.815.448 2.312.95c.498.503.789 1.188.943 2.345c.156 1.178.158 2.727.158 4.893v4.993c0 1.566-.001 2.68-.087 3.488c-.09.83-.253 1.141-.405 1.282c-.234.215-.528.35-.84.385c-.2.023-.534-.054-1.21-.532c-.658-.467-1.487-1.198-2.653-2.23l-.026-.023c-.488-.431-.892-.788-1.249-1.05c-.373-.272-.749-.482-1.192-.571a3 3 0 0 0-1.176 0c-.443.09-.82.299-1.192.572c-.357.26-.761.618-1.249 1.049l-.026.023c-1.166 1.032-1.995 1.763-2.653 2.23c-.676.478-1.01.555-1.21.532a1.5 1.5 0 0 1-.84-.385c-.152-.141-.316-.452-.404-1.282c-.087-.809-.088-1.922-.088-3.488v-4.994c0-2.165.002-3.714.158-4.892c.154-1.157.445-1.842.943-2.345" clip-rule="evenodd"></path>
+        </svg>
+    </div>
+</div>
+`;
+favBtn.style.position = 'absolute';
+favBtn.style.top = '0';
+favBtn.style.left = '0';
+favBtn.style.width = '100%';
+favBtn.style.height = '100%';
+favBtn.style.display = 'flex';
+favBtn.style.alignItems = 'center';
+favBtn.style.justifyContent = 'center';
+favBtn.style.cursor = 'pointer';
+favBtn.style.zIndex = '2';
+favBtn.style.background = 'none';
 
-                const titleDiv = document.createElement('div');
-                titleDiv.className = 'streamer-title';
-                titleDiv.textContent = data.title;
+// Favori ise ikon altın renkli olsun
+const favKey = 'kick-gta-favorites';
+let favorites = [];
+try {
+    favorites = JSON.parse(localStorage.getItem(favKey)) || [];
+} catch {}
+const isFav = favorites.includes(data.username);
+if (isFav) {
+    favBtn.querySelector('svg').style.color = '#ffe066';
+}
 
-                nameContainer.append(nameDiv, titleDiv);
-                headerDiv.append(avatarLink, nameContainer);
+favBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    e.preventDefault();
+    let favs = [];
+    try {
+        favs = JSON.parse(localStorage.getItem(favKey)) || [];
+    } catch {}
+    if (!favs.includes(data.username)) {
+        favs.unshift(data.username);
+    } else {
+        favs = favs.filter(u => u !== data.username);
+    }
+    localStorage.setItem(favKey, JSON.stringify(favs));
+    // Yeniden sırala ve göster
+    UI.renderStreamers(Object.values(APP_STATE.streamerStats));
+});
+
+avatarWrapper.appendChild(avatarImg);
+avatarWrapper.appendChild(favBtn);
+
+// YAYINCI ADI ve BAŞLIK EKLE
+const nameContainer = document.createElement('div');
+nameContainer.className = 'streamer-name-container';
+
+const nameLink = document.createElement('a');
+nameLink.className = 'streamer-name';
+nameLink.href = `https://kick.com/${data.username}`;
+nameLink.target = '_blank';
+nameLink.rel = 'noopener noreferrer';
+nameLink.textContent = data.username;
+
+const titleDiv = document.createElement('div');
+titleDiv.className = 'streamer-title';
+titleDiv.textContent = data.title || '';
+
+nameContainer.appendChild(nameLink);
+nameContainer.appendChild(titleDiv);
+
+headerDiv.append(avatarWrapper, nameContainer);
                 infoDiv.appendChild(headerDiv);
                 
                 const metaDiv = document.createElement('div');
