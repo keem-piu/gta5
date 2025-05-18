@@ -644,7 +644,7 @@
                 "beratarsllan", "orhunpaso", "mordredsly", "hudsoonn", "cagatayk", "phriksos"
             ],
             SPONSORED_STREAMER: "keempiu",
-            CACHE_TTL: 24 * 60 * 60 * 1000
+            CACHE_TTL: 3 * 24 * 60 * 60 * 1000 // 3 gün
         };
 
         // Uygulama Durumu
@@ -855,49 +855,45 @@
             fetchStreamerStats: async () => {
                 const stats = {};
                 const results = [];
-                
+                const now = Date.now();
+
                 try {
-                    if (APP_STATE.isFirstLoad) {
-                        const cachedLiveStreamers = Utils.getCachedData('live-streamers') || [];
-                        const batch = cachedLiveStreamers.length > 0 ? 
-                            cachedLiveStreamers : 
-                            CONFIG.STATIC_STREAMERS.slice(0, CONFIG.BATCH_SIZE);
-                        
-                        const batchRequests = batch.map(username => 
-                            API.fetchStreamerData(username).catch(e => {
-                                console.error(`${username} veri alınamadı:`, e);
-                                return API.getFallbackData(username);
-                            })
+                    if (APP_STATE.isFirstLoad || now - lastOfflineUpdate > OFFLINE_UPDATE_INTERVAL) {
+                        lastOfflineUpdate = now;
+                        // Tüm yayıncıları güncelle
+                        for (let i = 0; i < CONFIG.STATIC_STREAMERS.length; i += CONFIG.BATCH_SIZE) {
+                            const batch = CONFIG.STATIC_STREAMERS.slice(i, i + CONFIG.BATCH_SIZE);
+                            const batchRequests = batch.map(username =>
+                                API.fetchStreamerData(username).catch(e => API.getFallbackData(username))
+                            );
+                            const batchResults = await Promise.all(batchRequests);
+                            results.push(...batchResults);
+                        }
+                    } else {
+                        // Sadece canlı olanları güncelle
+                        const liveUsernames = Utils.getCachedData('live-streamers') || [];
+                        const batchRequests = liveUsernames.map(username =>
+                            API.fetchStreamerData(username).catch(e => API.getFallbackData(username))
                         );
-                        
                         const batchResults = await Promise.all(batchRequests);
                         results.push(...batchResults);
-                        
-                        APP_STATE.isFirstLoad = false;
-                        return results;
-                    }
-                    
-                    for (let i = 0; i < CONFIG.STATIC_STREAMERS.length; i += CONFIG.BATCH_SIZE) {
-                        const batch = CONFIG.STATIC_STREAMERS.slice(i, i + CONFIG.BATCH_SIZE);
-                        const batchRequests = batch.map(username => 
-                            API.fetchStreamerData(username).catch(e => {
-                                console.error(`${username} veri alınamadı:`, e);
-                                return API.getFallbackData(username);
-                            })
-                        );
-                        
-                        const batchResults = await Promise.all(batchRequests);
-                        results.push(...batchResults);
+
+                        // Offline'ları cache'den al
+                        const cachedStats = APP_STATE.streamerStats;
+                        CONFIG.STATIC_STREAMERS.forEach(username => {
+                            if (!liveUsernames.includes(username) && cachedStats[username]) {
+                                results.push(cachedStats[username]);
+                            }
+                        });
                     }
 
                     const liveStreamers = results.filter(s => s.isLive).map(s => s.username);
                     Utils.setCachedData('live-streamers', liveStreamers);
-                    
+
                     results.forEach(data => stats[data.username] = data);
                     APP_STATE.streamerStats = stats;
                     return results;
                 } catch (error) {
-                    console.error('Streamer istatistikleri alınamadı:', error);
                     throw error;
                 }
             }
@@ -1338,11 +1334,9 @@ headerDiv.append(avatarWrapper, nameContainer);
 document.addEventListener('DOMContentLoaded', () => {
     const searchInput = document.getElementById('search-input');
     if (searchInput) {
-        searchInput.addEventListener('input', () => {
-            // Son alınan veriyi filtrele ve tekrar göster
+        searchInput.addEventListener('input', debounce(() => {
             UI.renderStreamers(Object.values(APP_STATE.streamerStats));
-        });
-        // Enter'a basınca da filtrele
+        }, 200));
         document.getElementById('search-form').addEventListener('submit', (e) => {
             e.preventDefault();
             UI.renderStreamers(Object.values(APP_STATE.streamerStats));
